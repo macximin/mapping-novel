@@ -29,6 +29,9 @@ def pick(cands, df):
 def clean_title(txt) -> str:
     t = str(txt).strip()
 
+    # 0.5) " 텍스트 + 공백 + 숫자 + '부' + (선택적 ' - 뒤텍스트')" 을 모두 제거
+    t = re.sub(r"\s+\d+부(?:\s*-\s*.*)?$", "", t)
+    
     # 0) 예외 패턴: 이 안에 들어 있으면 그 값만 꺼내서 반환
     exceptions = ["24/7", "실명마제", "라마대제"]
     for ex in exceptions:
