@@ -28,6 +28,9 @@ def pick(cands, df):
 
 def clean_title(txt) -> str:
     t = str(txt).strip()
+    
+    # 0.4) 끝에 붙은 '~일탈~' 같은 '~텍스트~' 패턴을 통째로 제거
+    t = re.sub(r"\s*~[^~]+~\s*$", "", t)
 
     # 0.5) " 텍스트 + 공백 + 숫자 + '부' + (선택적 ' - 뒤텍스트')" 을 모두 제거
     t = re.sub(r"\s+\d+부(?:\s*-\s*.*)?$", "", t)
