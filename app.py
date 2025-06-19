@@ -6,6 +6,10 @@ import openpyxl, xlsxwriter
 from datetime import datetime, date
 import unicodedata  # 🔹 공백 및 유니코드 정규화를 위한 모듈
 
+st.write("🔒 st.secrets:", st.secrets)
+# 또는
+st.sidebar.json(st.secrets)
+
 # ── (고정) ③번 파일 경로 ─────────────────────────────────────────────
 DATA_DIR   = pathlib.Path(__file__).parent / "data"
 FILE3_PATH = DATA_DIR / "all_contents.xlsx"
