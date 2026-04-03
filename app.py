@@ -193,7 +193,7 @@ if st.button("🟢 매핑 실행"):
     df2["최종_매핑결과"] = df2["정제_상품명"].map(map3).fillna(df2["매핑결과"])
 
     # 7) 매핑콘텐츠명 / 콘텐츠ID --------------------------------------
-    mask_pair = df2["정제_상품명"] == df2["매핑결과"]
+    mask_pair = df2["정제_상품명"].astype(str) == df2["매핑결과"].astype(str)
     base_pairs = (
         df2.loc[mask_pair, ["정제_상품명", "최종_매핑결과"]]
            .query("`정제_상품명`.str.strip() != ''", engine="python")
@@ -205,7 +205,7 @@ if st.button("🟢 매핑 실행"):
     )
     base_pairs["매핑콘텐츠명"] = base_pairs["매핑콘텐츠명"].apply(clean_title)
 
-    dup_mask     = base_pairs["매핑콘텐츠명"] == base_pairs["콘텐츠ID"]
+    dup_mask     = base_pairs["매핑콘텐츠명"].astype(str) == base_pairs["콘텐츠ID"].astype(str)
     pairs_unique = (
         base_pairs.loc[~dup_mask]
                   .sort_values("매핑콘텐츠명")
