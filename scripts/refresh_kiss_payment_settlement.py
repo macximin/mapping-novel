@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import calendar
 import re
 import sys
 from dataclasses import dataclass
@@ -15,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from kiss_refresh_history import now_iso, record_refresh_run
+from kiss_refresh_history import now_iso, record_refresh_run, record_s2_refresh_changes
 from kiss_refresh_lock import refresh_lock
 from kiss_payment_settlement import (
     import_payment_settlement_frame,
@@ -29,6 +28,7 @@ KISS_API_BASE_URL = "https://kiss-api.kld.kr"
 KISS_COMPANY_CODE = "1000"
 NOVEL_CONTENT_STYLE_CODE = "102"
 JWT_PATTERN = re.compile(r"^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$")
+FULL_REPLACE_FALLBACK_START_DATE = date(1900, 1, 1)
 
 
 class KISSRefreshError(RuntimeError):
@@ -64,7 +64,6 @@ def main() -> None:
                 frame,
                 cache_path=args.cache,
                 s2_lookup_path=args.s2_lookup,
-                merge_existing=args.merge_existing,
             )
             save_summary(summary_path, result)
         history_id = record_refresh_run(
@@ -85,6 +84,9 @@ def main() -> None:
             cache_rows_before=result.cache_rows_before,
             cache_rows_after=result.cache_rows_after,
             s2_lookup_rows=result.s2_lookup_rows,
+            s2_change_added=result.s2_change_added,
+            s2_change_deleted=result.s2_change_deleted,
+            s2_change_modified=result.s2_change_modified,
             sales_channel_content_id_unique=result.summary.get("sales_channel_content_id_unique"),
             content_id_unique=result.summary.get("content_id_unique"),
             summary_json_path=summary_path,
@@ -92,6 +94,7 @@ def main() -> None:
             s2_lookup_path=result.output_s2_lookup,
             script=Path(__file__).name,
         )
+        record_s2_refresh_changes(args.history_db, history_id, result.s2_change_rows)
 
         print(f"mode={window.mode}")
         print(f"search_start_date={window.start_date or '<blank>'}")
@@ -99,10 +102,13 @@ def main() -> None:
         print(f"api_total_rows={total_rows}")
         print(f"fetched_rows={len(rows)}")
         print(f"fetched_pages={fetched_pages}")
-        print(f"cache_policy={'merge' if args.merge_existing else 'replace'}")
+        print("local_s2_policy=replace")
         print(f"cache_rows_before={result.cache_rows_before}")
         print(f"cache_rows_after={result.cache_rows_after}")
         print(f"s2_lookup_rows={result.s2_lookup_rows}")
+        print(f"s2_change_added={result.s2_change_added}")
+        print(f"s2_change_deleted={result.s2_change_deleted}")
+        print(f"s2_change_modified={result.s2_change_modified}")
         print(f"cache={result.output_cache}")
         print(f"s2_lookup={result.output_s2_lookup}")
         print(f"summary={summary_path}")
@@ -131,9 +137,9 @@ def main() -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Refresh local S2 lookup cache from S2 API.")
-    parser.add_argument("--mode", choices=("full-replace", "rolling-3m", "initial", "custom"), default="full-replace")
-    parser.add_argument("--start-date", default="", help="YYYY-MM-DD. Required for --mode custom.")
-    parser.add_argument("--end-date", default="", help="YYYY-MM-DD. Required for --mode custom.")
+    parser.add_argument("--mode", choices=("full-replace", "initial", "custom"), default="full-replace")
+    parser.add_argument("--start-date", default="", help="YYYY-MM-DD. Only used for S2 full-replace fallback.")
+    parser.add_argument("--end-date", default="", help="YYYY-MM-DD. Only used for S2 full-replace fallback.")
     parser.add_argument("--today", default="", help="Override today's date in YYYY-MM-DD for tests.")
     parser.add_argument("--env-file", default=str(ROOT / ".env"))
     parser.add_argument("--page-size", type=int, default=DEFAULT_PAGE_SIZE)
@@ -143,7 +149,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--summary", default="")
     parser.add_argument("--history-db", default=str(ROOT / "data" / "kiss_refresh_history.sqlite"))
     parser.add_argument("--lock-dir", default=str(ROOT / "data" / "s2_refresh.lock"))
-    parser.add_argument("--merge-existing", action="store_true", help="Merge incoming rows into the existing cache instead of replacing it.")
     return parser.parse_args()
 
 
@@ -296,28 +301,23 @@ def resolve_query_window(mode: str, *, today: date, start_date: str, end_date: s
     if mode in {"full-replace", "initial"}:
         return QueryWindow(mode=mode, start_date="", end_date="")
     if mode == "rolling-3m":
-        return QueryWindow(mode=mode, start_date=subtract_calendar_months(today, 3).isoformat(), end_date=today.isoformat())
+        raise KISSRefreshError("S2 최신화는 전체 교체만 지원합니다. rolling-3m 조회는 사용할 수 없습니다.")
     if not start_date.strip() or not end_date.strip():
-        raise KISSRefreshError("--mode custom 에서는 --start-date 와 --end-date 를 모두 넣어야 합니다.")
+        raise KISSRefreshError("--mode custom 은 S2 전체 교체 보완 조회에만 사용하며 --start-date 와 --end-date 가 필요합니다.")
     start = date.fromisoformat(start_date)
     end = date.fromisoformat(end_date)
     if start > end:
         raise KISSRefreshError("start-date 가 end-date 보다 늦을 수 없습니다.")
+    if start != FULL_REPLACE_FALLBACK_START_DATE or end != today:
+        raise KISSRefreshError(
+            f"S2 최신화는 전체 교체만 지원합니다. 기간 보완 조회는 "
+            f"{FULL_REPLACE_FALLBACK_START_DATE.isoformat()}부터 {today.isoformat()}까지만 허용합니다."
+        )
     return QueryWindow(mode=mode, start_date=start.isoformat(), end_date=end.isoformat())
 
 
 def resolve_today(raw_value: str) -> date:
     return date.fromisoformat(raw_value) if raw_value.strip() else date.today()
-
-
-def subtract_calendar_months(anchor: date, months: int) -> date:
-    target_year = anchor.year
-    target_month = anchor.month - months
-    while target_month <= 0:
-        target_month += 12
-        target_year -= 1
-    last_day = calendar.monthrange(target_year, target_month)[1]
-    return date(target_year, target_month, min(anchor.day, last_day))
 
 
 if __name__ == "__main__":

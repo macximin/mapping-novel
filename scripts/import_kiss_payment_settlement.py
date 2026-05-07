@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from kiss_refresh_history import now_iso, record_refresh_run
+from kiss_refresh_history import now_iso, record_refresh_run, record_s2_refresh_changes
 from kiss_payment_settlement import import_payment_settlement_export, save_summary
 
 
@@ -33,6 +33,9 @@ def main() -> None:
             cache_rows_before=result.cache_rows_before,
             cache_rows_after=result.cache_rows_after,
             s2_lookup_rows=result.s2_lookup_rows,
+            s2_change_added=result.s2_change_added,
+            s2_change_deleted=result.s2_change_deleted,
+            s2_change_modified=result.s2_change_modified,
             sales_channel_content_id_unique=result.summary.get("sales_channel_content_id_unique"),
             content_id_unique=result.summary.get("content_id_unique"),
             summary_json_path=args.summary,
@@ -41,10 +44,14 @@ def main() -> None:
             source_file_path=args.input,
             script=Path(__file__).name,
         )
+        record_s2_refresh_changes(args.history_db, history_id, result.s2_change_rows)
         print(f"source_rows={result.source_rows}")
         print(f"cache_rows_before={result.cache_rows_before}")
         print(f"cache_rows_after={result.cache_rows_after}")
         print(f"s2_lookup_rows={result.s2_lookup_rows}")
+        print(f"s2_change_added={result.s2_change_added}")
+        print(f"s2_change_deleted={result.s2_change_deleted}")
+        print(f"s2_change_modified={result.s2_change_modified}")
         print(f"cache={result.output_cache}")
         print(f"s2_lookup={result.output_s2_lookup}")
         print(f"summary={args.summary}")
@@ -69,8 +76,8 @@ def main() -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Import KISS 지급 정산 관리 목록 export into a local cache.")
-    parser.add_argument("input", help="Downloaded KISS 지급_정산_관리_목록 xlsx")
+    parser = argparse.ArgumentParser(description="Import S2 source export into the local S2 basis.")
+    parser.add_argument("input", help="Downloaded S2 source xlsx")
     parser.add_argument("--cache", default=str(ROOT / "data" / "kiss_payment_settlement_cache.csv"))
     parser.add_argument("--s2-lookup", default=str(ROOT / "data" / "kiss_payment_settlement_s2_lookup.csv"))
     parser.add_argument("--summary", default=str(ROOT / "doc" / "2026-05-07" / "kiss_payment_settlement_refresh_summary.json"))

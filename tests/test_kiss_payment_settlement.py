@@ -10,7 +10,6 @@ from openpyxl import Workbook
 from kiss_payment_settlement import (
     import_payment_settlement_frame,
     load_payment_settlement_list,
-    merge_payment_settlement_cache,
     payment_settlement_frame_from_api_rows,
     summarize_payment_settlement,
     to_s2_lookup,
@@ -117,31 +116,6 @@ class KissPaymentSettlementTest(unittest.TestCase):
 
         self.assertEqual(lookup.loc[0, "판매채널콘텐츠ID"], "301")
         self.assertEqual(lookup.loc[0, "콘텐츠ID"], "401")
-
-    def test_cache_merge_prefers_refreshed_rows(self) -> None:
-        existing = payment_settlement_frame_from_api_rows(
-            [
-                {
-                    "pymtSetlId": "101",
-                    "pymtSetlDtlId": "201",
-                    "schnCtnsId": "301",
-                    "ctnsId": "401",
-                    "ctnsNm": "오래된 제목",
-                    "schnNm": "테스트 채널",
-                    "ctnsStleCdNm": "소설",
-                    "cnfmStsCdNm": "승인",
-                    "pymtSetlStsCdNm": "운영중",
-                    "cretDtm": "2026-05-07 11:00:00",
-                }
-            ]
-        )
-        incoming = existing.copy()
-        incoming.loc[0, "콘텐츠명"] = "새 제목"
-
-        merged = merge_payment_settlement_cache(existing, incoming)
-
-        self.assertEqual(len(merged), 1)
-        self.assertEqual(merged.loc[0, "콘텐츠명"], "새 제목")
 
     def test_summary_counts_sales_channel_content_conflicts(self) -> None:
         frame = payment_settlement_frame_from_api_rows(
