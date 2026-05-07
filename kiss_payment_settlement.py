@@ -46,6 +46,9 @@ API_RAW_COLUMN_ALIASES = {
     "cretDtm": "지급정산마스터 등록 일자",
 }
 
+S2_AUDIT_COLUMNS = ["콘텐츠명", "S2마스터ID", "콘텐츠ID", "작가정보"]
+AUTHOR_COLUMN_TOKENS = ("작가", "저자", "author", "writer")
+
 
 @dataclass(frozen=True)
 class PaymentSettlementImportResult:
@@ -53,6 +56,10 @@ class PaymentSettlementImportResult:
     cache_rows_before: int
     cache_rows_after: int
     s2_lookup_rows: int
+    s2_change_added: int
+    s2_change_deleted: int
+    s2_change_modified: int
+    s2_change_rows: pd.DataFrame
     output_cache: Path
     output_s2_lookup: Path
     summary: dict[str, Any]
@@ -141,7 +148,7 @@ def validate_payment_settlement_columns(frame: pd.DataFrame) -> None:
     missing = [column for column in REQUIRED_COLUMNS if column not in frame.columns]
     if missing:
         available = ", ".join(map(str, frame.columns))
-        raise ValueError(f"지급 정산 관리 목록 필수 컬럼이 없습니다: {missing}. 현재 컬럼: {available}")
+        raise ValueError(f"S2 원천 엑셀 필수 컬럼이 없습니다: {missing}. 현재 컬럼: {available}")
 
 
 def to_s2_lookup(frame: pd.DataFrame) -> pd.DataFrame:
@@ -169,21 +176,6 @@ def to_s2_lookup(frame: pd.DataFrame) -> pd.DataFrame:
     if "지급정산마스터 등록 일자" in working.columns:
         result["지급정산마스터_등록일자"] = working["지급정산마스터 등록 일자"].map(text)
     return result.reset_index(drop=True)
-
-
-def merge_payment_settlement_cache(existing: pd.DataFrame | None, incoming: pd.DataFrame) -> pd.DataFrame:
-    frames = [incoming]
-    if existing is not None and not existing.empty:
-        frames.append(existing)
-    merged = pd.concat(frames, ignore_index=True)
-    merged = merged.rename(columns={column: normalize_header(column) for column in merged.columns})
-    if "지급정산마스터 등록 일자" in merged.columns:
-        merged["지급정산마스터 등록 일자"] = merged["지급정산마스터 등록 일자"].map(normalize_excel_date)
-        merged = merged.sort_values("지급정산마스터 등록 일자", ascending=False, kind="stable")
-    if "지급정산상세ID" in merged.columns:
-        merged["지급정산상세ID"] = merged["지급정산상세ID"].map(_id_text)
-        merged = merged.drop_duplicates(subset=["지급정산상세ID"], keep="first")
-    return merged.reset_index(drop=True)
 
 
 def summarize_payment_settlement(frame: pd.DataFrame) -> dict[str, Any]:
@@ -239,7 +231,7 @@ def import_payment_settlement_export(
     *,
     cache_path: str | Path,
     s2_lookup_path: str | Path,
-    merge_existing: bool = True,
+    merge_existing: bool = False,
 ) -> PaymentSettlementImportResult:
     incoming = load_payment_settlement_list(source)
     return import_payment_settlement_frame(
@@ -255,26 +247,35 @@ def import_payment_settlement_frame(
     *,
     cache_path: str | Path,
     s2_lookup_path: str | Path,
-    merge_existing: bool = True,
+    merge_existing: bool = False,
 ) -> PaymentSettlementImportResult:
     cache = Path(cache_path)
     s2_lookup = Path(s2_lookup_path)
+    if merge_existing:
+        raise ValueError("S2 최신화는 전체 교체만 지원합니다. 기존 로컬 S2 기준에 새 결과를 누적하지 않습니다.")
     incoming = _prepare_payment_settlement_frame(incoming)
-    existing = pd.read_csv(cache, dtype=object) if cache.exists() else None
+    existing = _prepare_payment_settlement_frame(pd.read_csv(cache, dtype=object)) if cache.exists() else None
     before = 0 if existing is None else len(existing)
-    merged = merge_payment_settlement_cache(existing if merge_existing else None, incoming)
-    lookup = to_s2_lookup(merged)
+    change_rows = build_s2_change_audit(existing, incoming)
+    replacement = incoming.reset_index(drop=True)
+    lookup = to_s2_lookup(replacement)
 
     cache.parent.mkdir(parents=True, exist_ok=True)
     s2_lookup.parent.mkdir(parents=True, exist_ok=True)
-    merged.to_csv(cache, index=False, encoding="utf-8-sig")
+    replacement.to_csv(cache, index=False, encoding="utf-8-sig")
     lookup.to_csv(s2_lookup, index=False, encoding="utf-8-sig")
-    summary = summarize_payment_settlement(merged)
+    summary = summarize_payment_settlement(replacement)
+    change_summary = summarize_s2_change_audit(change_rows)
+    summary["s2_change_summary"] = change_summary
     return PaymentSettlementImportResult(
         source_rows=len(incoming),
         cache_rows_before=before,
-        cache_rows_after=len(merged),
+        cache_rows_after=len(replacement),
         s2_lookup_rows=len(lookup),
+        s2_change_added=change_summary["added"],
+        s2_change_deleted=change_summary["deleted"],
+        s2_change_modified=change_summary["modified"],
+        s2_change_rows=change_rows,
         output_cache=cache,
         output_s2_lookup=s2_lookup,
         summary=summary,
@@ -298,11 +299,141 @@ def save_summary(path: str | Path, result: PaymentSettlementImportResult) -> Non
         "cache_rows_before": result.cache_rows_before,
         "cache_rows_after": result.cache_rows_after,
         "s2_lookup_rows": result.s2_lookup_rows,
+        "s2_change_added": result.s2_change_added,
+        "s2_change_deleted": result.s2_change_deleted,
+        "s2_change_modified": result.s2_change_modified,
         "output_cache": str(result.output_cache),
         "output_s2_lookup": str(result.output_s2_lookup),
         "summary": result.summary,
     }
     target.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def build_s2_change_audit(existing: pd.DataFrame | None, incoming: pd.DataFrame) -> pd.DataFrame:
+    old = _s2_audit_snapshot(existing)
+    new = _s2_audit_snapshot(incoming)
+    columns = [
+        "변경유형",
+        "판매채널콘텐츠ID",
+        "변경필드",
+        "이전_콘텐츠명",
+        "신규_콘텐츠명",
+        "이전_S2마스터ID",
+        "신규_S2마스터ID",
+        "이전_콘텐츠ID",
+        "신규_콘텐츠ID",
+        "이전_작가정보",
+        "신규_작가정보",
+    ]
+    if old.empty and new.empty:
+        return pd.DataFrame(columns=columns)
+
+    rows: list[dict[str, str]] = []
+    old_keys = set(old.index)
+    new_keys = set(new.index)
+
+    for key in sorted(new_keys - old_keys):
+        new_row = new.loc[key]
+        rows.append(_change_row("added", key, "신규", None, new_row))
+
+    for key in sorted(old_keys - new_keys):
+        old_row = old.loc[key]
+        rows.append(_change_row("deleted", key, "삭제", old_row, None))
+
+    for key in sorted(old_keys & new_keys):
+        old_row = old.loc[key]
+        new_row = new.loc[key]
+        changed = [column for column in S2_AUDIT_COLUMNS if text(old_row.get(column)) != text(new_row.get(column))]
+        if changed:
+            rows.append(_change_row("modified", key, " | ".join(changed), old_row, new_row))
+
+    return pd.DataFrame(rows, columns=columns)
+
+
+def summarize_s2_change_audit(change_rows: pd.DataFrame) -> dict[str, int]:
+    if change_rows.empty or "변경유형" not in change_rows.columns:
+        return {"added": 0, "deleted": 0, "modified": 0}
+    counts = change_rows["변경유형"].map(text).value_counts()
+    return {
+        "added": int(counts.get("added", 0)),
+        "deleted": int(counts.get("deleted", 0)),
+        "modified": int(counts.get("modified", 0)),
+    }
+
+
+def _s2_audit_snapshot(frame: pd.DataFrame | None) -> pd.DataFrame:
+    if frame is None or frame.empty:
+        return pd.DataFrame(columns=S2_AUDIT_COLUMNS).rename_axis("판매채널콘텐츠ID")
+
+    working = _normalize_frame(frame.copy())
+    if "판매채널콘텐츠ID" not in working.columns:
+        return pd.DataFrame(columns=S2_AUDIT_COLUMNS).rename_axis("판매채널콘텐츠ID")
+
+    working["판매채널콘텐츠ID"] = working["판매채널콘텐츠ID"].map(_id_text)
+    working = working[working["판매채널콘텐츠ID"].ne("")].copy()
+    if working.empty:
+        return pd.DataFrame(columns=S2_AUDIT_COLUMNS).rename_axis("판매채널콘텐츠ID")
+    if "지급정산마스터 등록 일자" in working.columns:
+        working["지급정산마스터 등록 일자"] = working["지급정산마스터 등록 일자"].map(normalize_excel_date)
+        working = working.sort_values("지급정산마스터 등록 일자", ascending=False, kind="stable")
+    working = working.drop_duplicates(subset=["판매채널콘텐츠ID"], keep="first")
+
+    author_columns = _author_columns(working)
+    snapshot = pd.DataFrame(index=working["판매채널콘텐츠ID"])
+    snapshot["콘텐츠명"] = working["콘텐츠명"].map(extract_master_work_title).map(text).to_list() if "콘텐츠명" in working.columns else ""
+    snapshot["S2마스터ID"] = working["지급정산마스터ID"].map(_id_text).to_list() if "지급정산마스터ID" in working.columns else ""
+    snapshot["콘텐츠ID"] = working["콘텐츠ID"].map(_id_text).to_list() if "콘텐츠ID" in working.columns else ""
+    snapshot["작가정보"] = working.apply(lambda row: _join_author_values(row, author_columns), axis=1).to_list() if author_columns else ""
+    snapshot.index.name = "판매채널콘텐츠ID"
+    return snapshot
+
+
+def _author_columns(frame: pd.DataFrame) -> list[str]:
+    columns: list[str] = []
+    for column in frame.columns:
+        normalized = str(column).lower()
+        if any(token in normalized for token in AUTHOR_COLUMN_TOKENS):
+            columns.append(str(column))
+    return columns
+
+
+def _join_author_values(row: pd.Series, author_columns: list[str]) -> str:
+    values: list[str] = []
+    seen: set[str] = set()
+    for column in author_columns:
+        value = text(row.get(column))
+        if value and value not in seen:
+            values.append(value)
+            seen.add(value)
+    return " | ".join(values)
+
+
+def _change_row(
+    change_type: str,
+    sales_channel_content_id: str,
+    changed_fields: str,
+    old_row: pd.Series | None,
+    new_row: pd.Series | None,
+) -> dict[str, str]:
+    return {
+        "변경유형": change_type,
+        "판매채널콘텐츠ID": sales_channel_content_id,
+        "변경필드": changed_fields,
+        "이전_콘텐츠명": _snapshot_value(old_row, "콘텐츠명"),
+        "신규_콘텐츠명": _snapshot_value(new_row, "콘텐츠명"),
+        "이전_S2마스터ID": _snapshot_value(old_row, "S2마스터ID"),
+        "신규_S2마스터ID": _snapshot_value(new_row, "S2마스터ID"),
+        "이전_콘텐츠ID": _snapshot_value(old_row, "콘텐츠ID"),
+        "신규_콘텐츠ID": _snapshot_value(new_row, "콘텐츠ID"),
+        "이전_작가정보": _snapshot_value(old_row, "작가정보"),
+        "신규_작가정보": _snapshot_value(new_row, "작가정보"),
+    }
+
+
+def _snapshot_value(row: pd.Series | None, column: str) -> str:
+    if row is None:
+        return ""
+    return text(row.get(column))
 
 
 def _read_first_sheet_ooxml(source: str | Path | BinaryIO) -> pd.DataFrame:

@@ -143,13 +143,13 @@ def adapter_blocking_messages(result: NormalizationResult) -> list[str]:
     if result.file_status == "excluded_by_rule":
         messages.append(f"파일 제외 규칙에 걸렸습니다: {result.spec.exclude_rule}")
     if result.file_status == "review_gate_not_default":
-        messages.append("중복/사람가공 가능성이 있어 기본 feed에서 제외했습니다.")
+        messages.append("중복 또는 사람이 가공한 파일일 가능성이 있어 S2 매핑 입력에서 제외했습니다.")
     if result.spec.blocks_default_feed:
-        messages.append(f"S2 기본 feed 차단 대상입니다: {result.spec.s2_gate}")
+        messages.append(f"S2 매핑 입력 차단 대상입니다: {result.spec.s2_gate}")
     if result.rows.empty:
         messages.append("어댑터가 데이터 행을 만들지 못했습니다.")
     elif result.default_feed_rows.empty:
-        messages.append("파싱은 됐지만 매핑 시스템으로 보낼 기본 feed 행이 없습니다.")
+        messages.append("파싱은 됐지만 S2 매핑으로 보낼 입력 행이 없습니다.")
     if any(audit.status == "header_not_found" for audit in result.sheet_audits):
         failed = ", ".join(audit.sheet for audit in result.sheet_audits if audit.status == "header_not_found")
         messages.append(f"헤더를 찾지 못한 시트가 있습니다: {failed}")
@@ -164,7 +164,7 @@ def adapter_warning_messages(result: NormalizationResult) -> list[str]:
     parsed_rows = len(result.rows)
     feed_rows = len(result.default_feed_rows)
     if parsed_rows != feed_rows:
-        messages.append(f"파싱 행 {parsed_rows:,}개 중 기본 feed는 {feed_rows:,}개입니다. 제외/검토 규칙을 확인하세요.")
+        messages.append(f"파싱 행 {parsed_rows:,}개 중 S2 매핑 입력은 {feed_rows:,}개입니다. 제외/검토 규칙을 확인하세요.")
     if not result.spec.s2_amount_policy_locked:
         messages.append(f"S2 금액 4컬럼 출력은 아직 잠금 전입니다: {result.spec.s2_gate}")
     if result.default_feed_rows[STANDARD_TITLE_COLUMN].map(text).eq("").any():

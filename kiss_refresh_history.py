@@ -27,6 +27,9 @@ REFRESH_RUN_COLUMNS = [
     "cache_rows_before",
     "cache_rows_after",
     "s2_lookup_rows",
+    "s2_change_added",
+    "s2_change_deleted",
+    "s2_change_modified",
     "sales_channel_content_id_unique",
     "content_id_unique",
     "summary_json_path",
@@ -36,6 +39,42 @@ REFRESH_RUN_COLUMNS = [
     "error_message",
     "script",
 ]
+
+REFRESH_RUN_EXTRA_COLUMNS = {
+    "s2_change_added": "INTEGER",
+    "s2_change_deleted": "INTEGER",
+    "s2_change_modified": "INTEGER",
+}
+
+S2_CHANGE_COLUMNS = [
+    "id",
+    "refresh_run_id",
+    "change_type",
+    "sales_channel_content_id",
+    "changed_fields",
+    "old_content_name",
+    "new_content_name",
+    "old_s2_master_id",
+    "new_s2_master_id",
+    "old_content_id",
+    "new_content_id",
+    "old_author_info",
+    "new_author_info",
+]
+
+S2_CHANGE_FIELD_MAP = {
+    "변경유형": "change_type",
+    "판매채널콘텐츠ID": "sales_channel_content_id",
+    "변경필드": "changed_fields",
+    "이전_콘텐츠명": "old_content_name",
+    "신규_콘텐츠명": "new_content_name",
+    "이전_S2마스터ID": "old_s2_master_id",
+    "신규_S2마스터ID": "new_s2_master_id",
+    "이전_콘텐츠ID": "old_content_id",
+    "신규_콘텐츠ID": "new_content_id",
+    "이전_작가정보": "old_author_info",
+    "신규_작가정보": "new_author_info",
+}
 
 
 def now_iso() -> str:
@@ -66,6 +105,9 @@ def init_history_db(path: str | Path) -> Path:
                 cache_rows_before INTEGER,
                 cache_rows_after INTEGER,
                 s2_lookup_rows INTEGER,
+                s2_change_added INTEGER,
+                s2_change_deleted INTEGER,
+                s2_change_modified INTEGER,
                 sales_channel_content_id_unique INTEGER,
                 content_id_unique INTEGER,
                 summary_json_path TEXT NOT NULL DEFAULT '',
@@ -77,9 +119,32 @@ def init_history_db(path: str | Path) -> Path:
             )
             """
         )
+        _ensure_refresh_run_columns(connection)
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS s2_refresh_changes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                refresh_run_id INTEGER NOT NULL,
+                change_type TEXT NOT NULL CHECK (change_type IN ('added', 'deleted', 'modified')),
+                sales_channel_content_id TEXT NOT NULL DEFAULT '',
+                changed_fields TEXT NOT NULL DEFAULT '',
+                old_content_name TEXT NOT NULL DEFAULT '',
+                new_content_name TEXT NOT NULL DEFAULT '',
+                old_s2_master_id TEXT NOT NULL DEFAULT '',
+                new_s2_master_id TEXT NOT NULL DEFAULT '',
+                old_content_id TEXT NOT NULL DEFAULT '',
+                new_content_id TEXT NOT NULL DEFAULT '',
+                old_author_info TEXT NOT NULL DEFAULT '',
+                new_author_info TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY(refresh_run_id) REFERENCES refresh_runs(id)
+            )
+            """
+        )
         connection.execute("CREATE INDEX IF NOT EXISTS idx_refresh_runs_started_at ON refresh_runs(started_at)")
         connection.execute("CREATE INDEX IF NOT EXISTS idx_refresh_runs_status ON refresh_runs(status)")
         connection.execute("CREATE INDEX IF NOT EXISTS idx_refresh_runs_source ON refresh_runs(source)")
+        connection.execute("CREATE INDEX IF NOT EXISTS idx_s2_refresh_changes_run ON s2_refresh_changes(refresh_run_id)")
+        connection.execute("CREATE INDEX IF NOT EXISTS idx_s2_refresh_changes_key ON s2_refresh_changes(sales_channel_content_id)")
         connection.commit()
     return db_path
 
@@ -108,6 +173,53 @@ def latest_refresh_runs(path: str | Path, *, limit: int = 10) -> list[dict[str, 
     return [dict(row) for row in rows]
 
 
+def record_s2_refresh_changes(path: str | Path, refresh_run_id: int, changes: Any) -> int:
+    db_path = init_history_db(path)
+    rows = _change_records(changes)
+    if not rows:
+        return 0
+    columns = [column for column in S2_CHANGE_COLUMNS if column != "id"]
+    placeholders = ", ".join("?" for _ in columns)
+    sql = f"INSERT INTO s2_refresh_changes ({', '.join(columns)}) VALUES ({placeholders})"
+    with closing(sqlite3.connect(db_path)) as connection:
+        connection.executemany(sql, [[refresh_run_id if column == "refresh_run_id" else row[column] for column in columns] for row in rows])
+        connection.commit()
+    return len(rows)
+
+
+def latest_s2_refresh_changes(path: str | Path, *, refresh_run_id: int | None = None, limit: int = 500) -> list[dict[str, Any]]:
+    db_path = init_history_db(path)
+    safe_limit = max(1, min(int(limit), 5000))
+    with closing(sqlite3.connect(db_path)) as connection:
+        connection.row_factory = sqlite3.Row
+        if refresh_run_id is None:
+            run = connection.execute(
+                """
+                SELECT id
+                FROM refresh_runs
+                WHERE status = 'success'
+                ORDER BY id DESC
+                LIMIT 1
+                """
+            ).fetchone()
+            if run is None:
+                return []
+            refresh_run_id = int(run["id"])
+        rows = connection.execute(
+            """
+            SELECT *
+            FROM s2_refresh_changes
+            WHERE refresh_run_id = ?
+            ORDER BY
+                CASE change_type WHEN 'modified' THEN 1 WHEN 'added' THEN 2 ELSE 3 END,
+                sales_channel_content_id
+            LIMIT ?
+            """,
+            (refresh_run_id, safe_limit),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def _normalize_fields(fields: dict[str, Any]) -> dict[str, Any]:
     now = now_iso()
     row: dict[str, Any] = {
@@ -127,6 +239,9 @@ def _normalize_fields(fields: dict[str, Any]) -> dict[str, Any]:
         "cache_rows_before": _int_or_none(fields.get("cache_rows_before")),
         "cache_rows_after": _int_or_none(fields.get("cache_rows_after")),
         "s2_lookup_rows": _int_or_none(fields.get("s2_lookup_rows")),
+        "s2_change_added": _int_or_none(fields.get("s2_change_added")),
+        "s2_change_deleted": _int_or_none(fields.get("s2_change_deleted")),
+        "s2_change_modified": _int_or_none(fields.get("s2_change_modified")),
         "sales_channel_content_id_unique": _int_or_none(fields.get("sales_channel_content_id_unique")),
         "content_id_unique": _int_or_none(fields.get("content_id_unique")),
         "summary_json_path": _path_text(fields.get("summary_json_path")),
@@ -137,6 +252,32 @@ def _normalize_fields(fields: dict[str, Any]) -> dict[str, Any]:
         "script": _text(fields.get("script")),
     }
     return row
+
+
+def _ensure_refresh_run_columns(connection: sqlite3.Connection) -> None:
+    existing = {row[1] for row in connection.execute("PRAGMA table_info(refresh_runs)").fetchall()}
+    for column, column_type in REFRESH_RUN_EXTRA_COLUMNS.items():
+        if column not in existing:
+            connection.execute(f"ALTER TABLE refresh_runs ADD COLUMN {column} {column_type}")
+
+
+def _change_records(changes: Any) -> list[dict[str, str]]:
+    if changes is None:
+        return []
+    if hasattr(changes, "to_dict"):
+        raw_rows = changes.to_dict("records")
+    else:
+        raw_rows = list(changes)
+
+    rows: list[dict[str, str]] = []
+    for raw in raw_rows:
+        row = {column: "" for column in S2_CHANGE_COLUMNS if column not in {"id", "refresh_run_id"}}
+        for source, target in S2_CHANGE_FIELD_MAP.items():
+            row[target] = _text(raw.get(source) if isinstance(raw, dict) else "")
+        change_type = row["change_type"]
+        if change_type in {"added", "deleted", "modified"}:
+            rows.append(row)
+    return rows
 
 
 def _status(value: Any) -> str:
