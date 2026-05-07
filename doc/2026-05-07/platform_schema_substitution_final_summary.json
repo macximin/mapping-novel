@@ -1,0 +1,54 @@
+{
+  "audit_date": "2026-05-07",
+  "source_root": "\\\\172.16.10.120\\소설사업부\\판무팀_ssot\\100_계산서_매출등록_자료",
+  "platform_count": 37,
+  "schema_group_count": 80,
+  "adversarial_audit_rows": 111,
+  "audit_rows_per_platform": 3,
+  "final_class_counts": {
+    "single_header_policy_gate": 18,
+    "special_parser_required": 4,
+    "wide_header_policy_gate": 3,
+    "single_header_amount_policy_required": 4,
+    "mixed_sheet_policy_gate": 3,
+    "non_s2_source_blocked": 2,
+    "multi_adapter_policy_gate": 1,
+    "single_header_with_aux_exclusion": 1,
+    "multi_schema_amount_policy_required": 1
+  },
+  "group_action_counts": {
+    "include_after_amount_policy": 40,
+    "special_parser_only": 8,
+    "include_candidate_after_rescan": 7,
+    "include_for_detail_or_reconcile_only": 1,
+    "blocked_non_s2_source": 3,
+    "include_candidate": 9,
+    "exclude_aux_or_summary": 10,
+    "exclude_or_manual_summary": 2
+  },
+  "amount_status_counts": {
+    "needs_reconcile": 1,
+    "needs_policy": 8,
+    "needs_cancel_policy": 3,
+    "candidate_confirmed_after_reconcile": 11,
+    "needs_coin_policy": 2,
+    "blocked_until_settlement_basis": 1,
+    "blocked_non_sales": 1,
+    "needs_derived_sale_policy": 2,
+    "needs_subadapter_policy": 1,
+    "blocked_non_content_ledger": 1,
+    "needs_fee_policy": 1,
+    "needs_tax_policy": 1,
+    "needs_tax_split_policy": 1,
+    "needs_contextual_amount_policy": 1,
+    "needs_purchase_rental_policy": 1,
+    "needs_section_policy": 1
+  },
+  "outputs": [
+    "platform_schema_substitution_final.csv",
+    "platform_schema_substitution_final_groups.csv",
+    "platform_schema_substitution_final_adversarial_audits.csv",
+    "platform_schema_substitution_final_report.md",
+    "platform_schema_substitution_representative_rescan.csv"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "audit_date": "2026-05-07",
+  "source_root": "\\\\172.16.10.120\\소설사업부\\판무팀_ssot\\100_계산서_매출등록_자료",
+  "platform_total": 37,
+  "platforms_with_april_source": 16,
+  "platforms_without_april_source": 21,
+  "april_files_tested": 28,
+  "materialization_status_counts": {
+    "not_tested_no_april_source": 21,
+    "materialized_default_feed": 16
+  },
+  "mapping_engine_smoke_status_counts": {
+    "skipped": 21,
+    "pass_after_substitution": 14,
+    "pass_with_review": 2
+  },
+  "file_parse_status_counts": {
+    "parsed": 28
+  },
+  "s2_projection_status_counts": {
+    "not_tested_no_april_source": 21,
+    "s2_projection_blocked_by_amount_or_policy": 13,
+    "s2_projection_candidate_after_policy": 3
+  },
+  "outputs": [
+    "april_origin_substitution_materialization_test_platforms.csv",
+    "april_origin_substitution_materialization_test_files.csv",
+    "april_origin_substitution_materialization_test_report.md",
+    "april_origin_substitution_materialization_review_rows_sanitized.csv"
+  ]
+}

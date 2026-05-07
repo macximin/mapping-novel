@@ -1,0 +1,38 @@
+﻿platform,april_file_count,april_sheet_count,audit_status,sheet_names,shape_labels,flags,recommendation,april_files
+교보,0,0,no_april_source,,,,4월 폴더/정산상세 없음. 37개 전수 감리를 위해 최신월 또는 다른 대표월 fallback 필요.,
+구글,1,1,april_representative_usable_for_adapter_audit,GoogleSalesTransactionReport,detail_candidate:1,,4월 원형을 adapter 기준 샘플로 사용 가능. 다만 금액 의미는 별도 검증.,구글\4월\2026년 4월 구글 정산상세(법인세).xlsx
+네이버,9,9,april_present_with_aux_or_human_signal,contentsSelling_2026-05-06,detail_candidate:9,merged_cells:9 | filename_human_work_signal:1,4월 파일에 보조/사람작업 신호가 있음. detail sheet와 aux sheet를 분리해야 함.,네이버\4월\2026년 4월 네이버 연재 정산상세.xlsx || 네이버\4월\2026년 4월 네이버 장르 정산상세.xlsx || 네이버\4월\선투자\2026년 4월 네이버 간딴 정산상세.xlsx || 네이버\4월\선투자\2026년 4월 네이버 김악개 정산상세.xlsx || 네이버\4월\선투자\2026년 4월 네이버 낙필 정산상세.xlsx || 네이버\4월\선투자\2026년 4월 네이버 북홀릭 정산상세.xlsx || 네이버\4월\선투자\2026년 4월 네이버 선투자 정산상세(통합).xlsx || 네이버\4월\선투자\2026년 4월 네이버 차라리 정산상세.xlsx || 네이버\4월\선투자\2026년 4월 네이버 호수 정산상세.xlsx
+노벨피아,1,1,april_representative_usable_for_adapter_audit,일별 정산,detail_candidate:1,merged_cells:1,4월 원형을 adapter 기준 샘플로 사용 가능. 다만 금액 의미는 별도 검증.,노벨피아\4월\2026년 4월 노벨피아 정산상세.xlsx
+로망띠끄,0,0,no_april_source,,,,4월 폴더/정산상세 없음. 37개 전수 감리를 위해 최신월 또는 다른 대표월 fallback 필요.,
+리디북스,0,0,no_april_source,,,,4월 폴더/정산상세 없음. 37개 전수 감리를 위해 최신월 또는 다른 대표월 fallback 필요.,
+모픽,1,1,april_representative_usable_for_adapter_audit,작품별정산,detail_candidate:1,,4월 원형을 adapter 기준 샘플로 사용 가능. 다만 금액 의미는 별도 검증.,모픽\4월\2026년 4월 모픽 정산상세.xlsx
+무툰,1,1,april_representative_usable_for_adapter_audit,Sheet,detail_candidate:1,merged_cells:1,4월 원형을 adapter 기준 샘플로 사용 가능. 다만 금액 의미는 별도 검증.,무툰\4월\2026년 4월 무툰 정산상세.xlsx
+문피아,1,1,april_representative_usable_for_adapter_audit,다우인큐브,detail_candidate:1,,4월 원형을 adapter 기준 샘플로 사용 가능. 다만 금액 의미는 별도 검증.,문피아\4월\2026년 4월 문피아 정산상세.xlsx
+미소설,1,1,april_representative_usable_for_adapter_audit,cpexcel20260504104935,detail_candidate:1,,4월 원형을 adapter 기준 샘플로 사용 가능. 다만 금액 의미는 별도 검증.,미소설\4월\2026년 4월 미소설 정산상세.xlsx
+미스터블루,0,0,no_april_source,,,,4월 폴더/정산상세 없음. 37개 전수 감리를 위해 최신월 또는 다른 대표월 fallback 필요.,
+밀리의서재,1,1,april_representative_usable_for_adapter_audit,list,detail_candidate:1,,4월 원형을 adapter 기준 샘플로 사용 가능. 다만 금액 의미는 별도 검증.,밀리의서재\4월\2026년 4월 밀리의서재 정산상세.xlsx
+보인&국립장애인도서관,0,0,no_april_source,,,,4월 폴더/정산상세 없음. 37개 전수 감리를 위해 최신월 또는 다른 대표월 fallback 필요.,
+부커스,2,2,april_present_with_aux_or_human_signal,CP 콘텐츠별 정산,detail_candidate:2,filename_human_work_signal:1,4월 파일에 보조/사람작업 신호가 있음. detail sheet와 aux sheet를 분리해야 함.,부커스\4월\2026년 4월 부커스 정산상세 - 복사본.xlsx || 부커스\4월\2026년 4월 부커스 정산상세.xlsx
+북큐브,0,0,no_april_source,,,,4월 폴더/정산상세 없음. 37개 전수 감리를 위해 최신월 또는 다른 대표월 fallback 필요.,
+북팔,0,0,no_april_source,,,,4월 폴더/정산상세 없음. 37개 전수 감리를 위해 최신월 또는 다른 대표월 fallback 필요.,
+블라이스,1,1,april_representative_usable_for_adapter_audit,CP정산20260506_085425,detail_candidate:1,merged_cells:1,4월 원형을 adapter 기준 샘플로 사용 가능. 다만 금액 의미는 별도 검증.,블라이스\4월\2026년 4월 블라이스 정산상세.xlsx
+스낵북,0,0,no_april_source,,,,4월 폴더/정산상세 없음. 37개 전수 감리를 위해 최신월 또는 다른 대표월 fallback 필요.,
+스토린랩,0,0,no_april_source,,,,4월 폴더/정산상세 없음. 37개 전수 감리를 위해 최신월 또는 다른 대표월 fallback 필요.,
+신영미디어,0,0,no_april_source,,,,4월 폴더/정산상세 없음. 37개 전수 감리를 위해 최신월 또는 다른 대표월 fallback 필요.,
+알라딘,0,0,no_april_source,,,,4월 폴더/정산상세 없음. 37개 전수 감리를 위해 최신월 또는 다른 대표월 fallback 필요.,
+알라딘 종이책,0,0,no_april_source,,,,4월 폴더/정산상세 없음. 37개 전수 감리를 위해 최신월 또는 다른 대표월 fallback 필요.,
+에이블리,0,0,no_april_source,,,,4월 폴더/정산상세 없음. 37개 전수 감리를 위해 최신월 또는 다른 대표월 fallback 필요.,
+에피루스,0,0,no_april_source,,,,4월 폴더/정산상세 없음. 37개 전수 감리를 위해 최신월 또는 다른 대표월 fallback 필요.,
+예스24,0,0,no_april_source,,,,4월 폴더/정산상세 없음. 37개 전수 감리를 위해 최신월 또는 다른 대표월 fallback 필요.,
+올툰,0,0,no_april_source,,,,4월 폴더/정산상세 없음. 37개 전수 감리를 위해 최신월 또는 다른 대표월 fallback 필요.,
+원스토어,0,0,no_april_source,,,,4월 폴더/정산상세 없음. 37개 전수 감리를 위해 최신월 또는 다른 대표월 fallback 필요.,
+윌라,0,0,no_april_source,,,,4월 폴더/정산상세 없음. 37개 전수 감리를 위해 최신월 또는 다른 대표월 fallback 필요.,
+조아라,4,4,april_representative_usable_for_adapter_audit,작품별 정산리스트_2026-4 | 작품별 정산리스트_2026-4 (1),detail_candidate:4,,4월 원형을 adapter 기준 샘플로 사용 가능. 다만 금액 의미는 별도 검증.,조아라\4월\로맨스\2026년 4월 조아라 로맨스 단행본 정산상세.xlsx || 조아라\4월\로맨스\2026년 4월 조아라 로맨스 정산상세.xlsx || 조아라\4월\판무\2026년 4월 조아라 판무 단행본 정산상세.xlsx || 조아라\4월\판무\2026년 4월 조아라 판무 정산상세.xlsx
+카카오,0,0,no_april_source,,,,4월 폴더/정산상세 없음. 37개 전수 감리를 위해 최신월 또는 다른 대표월 fallback 필요.,
+큐툰,1,1,april_representative_usable_for_adapter_audit,Sheet,detail_candidate:1,merged_cells:1,4월 원형을 adapter 기준 샘플로 사용 가능. 다만 금액 의미는 별도 검증.,큐툰\4월\2026년 4월 큐툰 정산상세.xlsx
+토스(구루컴퍼니),0,0,no_april_source,,,,4월 폴더/정산상세 없음. 37개 전수 감리를 위해 최신월 또는 다른 대표월 fallback 필요.,
+판무림,1,2,april_present_with_aux_or_human_signal,세부내역 | 표지,aux_sheet_name_candidate:1 | detail_candidate:1,aux_sheet_name_signal:1 | merged_cells:1,4월 파일에 보조/사람작업 신호가 있음. detail sheet와 aux sheet를 분리해야 함.,판무림\4월\2026년 4월 판무림 정산상세.xlsx
+피우리(누온),0,0,no_april_source,,,,4월 폴더/정산상세 없음. 37개 전수 감리를 위해 최신월 또는 다른 대표월 fallback 필요.,
+피플앤스토리,1,1,april_representative_usable_for_adapter_audit,다운로드,detail_candidate:1,merged_cells:1,4월 원형을 adapter 기준 샘플로 사용 가능. 다만 금액 의미는 별도 검증.,피플앤스토리\4월\2026년 4월 피플앤스토리 정산상세.xlsx
+하이북,1,1,april_representative_usable_for_adapter_audit,정산리스트,detail_candidate:1,,4월 원형을 adapter 기준 샘플로 사용 가능. 다만 금액 의미는 별도 검증.,하이북\4월\2026년 4월 하이북 정산상세.xlsx
+한아름,1,1,april_representative_usable_for_adapter_audit,Sheet1,detail_candidate:1,large_row_count:1,4월 원형을 adapter 기준 샘플로 사용 가능. 다만 금액 의미는 별도 검증.,한아름\4월\2026년 4월 한아름 정산상세.xlsx

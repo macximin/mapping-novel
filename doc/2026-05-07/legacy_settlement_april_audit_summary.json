@@ -1,0 +1,27 @@
+{
+  "platform_count": 37,
+  "platforms_with_april": 16,
+  "platforms_without_april": 21,
+  "april_file_count": 28,
+  "april_sheet_count": 29,
+  "platform_status_counts": {
+    "no_april_source": 21,
+    "april_representative_usable_for_adapter_audit": 13,
+    "april_present_with_aux_or_human_signal": 3
+  },
+  "sheet_shape_counts": {
+    "detail_candidate": 28,
+    "aux_sheet_name_candidate": 1
+  },
+  "sheet_flag_counts": {
+    "merged_cells": 15,
+    "filename_human_work_signal": 2,
+    "aux_sheet_name_signal": 1,
+    "large_row_count": 1
+  },
+  "outputs": [
+    "doc\\2026-05-07\\legacy_settlement_april_audit_files.csv",
+    "doc\\2026-05-07\\legacy_settlement_april_audit_sheets.csv",
+    "doc\\2026-05-07\\legacy_settlement_april_audit_platforms.csv"
+  ]
+}

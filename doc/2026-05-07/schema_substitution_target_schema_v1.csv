@@ -1,0 +1,32 @@
+﻿canonical_field,korean_alias,type,required_for_s2_output,required_for_current_mapping,preserve_in_normalized_rows,rule,failure_policy
+schema_version,스키마버전,string,Y,Y,Y,고정값. 치환 규칙 변경 시 bump,없으면 schema_error
+platform,플랫폼,string,Y,Y,Y,상위 폴더/사용자 선택값,없으면 schema_error
+source_file,원본파일,string,Y,Y,Y,원본 추적용,없으면 schema_error
+source_sheet,원본시트,string,Y,Y,Y,시트 선별/검산용,없으면 schema_error
+source_row_no,원본행번호,integer,Y,Y,Y,원본 Excel 행 번호,없으면 schema_error
+source_section,원본구간,string,N,Y,Y,한아름/네이버/판무림 같은 다중 구간 문맥,구조형 파일이면 필수
+adapter_id,어댑터ID,string,Y,Y,Y,platform + schema_signature 기반,없으면 schema_error
+schema_signature,스키마시그니처,string,Y,Y,Y,헤더/시트 구조 fingerprint,unknown이면 quarantine
+schema_status,스키마상태,enum,Y,Y,Y,parsed/needs_policy/schema_error/quarantined,parsed 외 S2 출력 금지
+row_status,행상태,enum,Y,Y,Y,data/subtotal/total/note/blank/cancel 등,data 외 S2 출력 금지
+raw_title,원본작품명,string,Y,Y,Y,작품명/상품명/Title 등 원본값,빈 값이면 blank_key
+normalized_title,표준작품명,string,Y,Y,Y,매칭용 위생 처리 결과,원본 보존 필수
+raw_author,원본작가명,string,N,Y,Y,동명이작/모호매칭 보조,없으면 제목 단독 매칭
+external_work_id,외부작품ID,string,N,Y,Y,작품코드/컨텐츠No/시리즈 코드/Product 후보,있으면 매칭 보조
+external_episode_id,외부권차ID,string,N,N,Y,각 권 코드/회차 코드/ISBN 후보,권차 집계 검증용
+isbn,ISBN,string,N,N,Y,도서/전자출판물 ISBN,ISBN만 있을 때 매칭 보조
+sale_type,판매유형,string,N,N,Y,구매/대여/정액제/시간/건당 등,금액 의미 검증용
+sales_count,판매건수,number,N,N,Y,판매/열람/사용 건수,금액 파생식에 필요할 수 있음
+cancel_count,취소건수,number,N,N,Y,취소/환불 건수,상계/차감 검토
+gross_sales_amount,판매금액,money,Y,N,Y,S2 판매금액 후보. 직접 또는 파생,rule_status confirmed 전 출력 금지
+settlement_base_amount,정산기준액,money,Y,N,Y,S2 정산기준액 후보,rule_status confirmed 전 출력 금지
+offset_amount,상계금액,money,Y,N,Y,S2 상계금액 후보,없음 확인 전 0 대입 금지
+fee_amount,수수료금액,money,N,N,Y,마켓/결제/공제 수수료,상계 후보로만 사용
+cancel_amount,취소금액,money,N,N,Y,취소/환불 금액,판매금액 차감 또는 상계 정책 필요
+tax_amount,세액,money,N,N,Y,과세/면세 분리 대응,세전/세후 구분 보존
+currency,통화,string,N,N,Y,KRW/USD 등,구글 등 외화 대응
+amount_rule_id,금액규칙ID,string,Y,N,Y,금액 산식/컬럼 선택 규칙,없으면 needs_policy
+amount_rule_status,금액규칙상태,enum,Y,N,Y,confirmed/derived_confirmed/needs_policy/blocked,confirmed 계열만 S2 출력
+match_status,매칭상태,enum,Y,Y,Y,matched/no_match/ambiguous/blank_key,matched만 S2 출력
+sales_channel_content_id,판매채널콘텐츠ID,string,Y,N,Y,S2 콘텐츠 리스트 매칭 결과,없으면 S2 출력 금지
+validation_notes,검증메모,string,N,Y,Y,규칙 적용/보류 사유,감리 추적용

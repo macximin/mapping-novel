@@ -1,0 +1,36 @@
+﻿amount_rule_status,default_feed_rows,error,file_status,parse_status,parsed_rows,parser_contract,period,platform,relative_path,s2_amount_policy_locked,s2_gate,sheet_audits,title_present_rows
+needs_policy,4242,,include,parsed,4242,google_transaction_fixed_columns,2026-02,구글,구글\2월\2026년 2월 구글 정산상세(법인세).xlsx,False,Google 금액 기준 확정 + 외화/세금 처리 전 S2 출력 금지,GoogleSalesTransactionReport:parsed:h1:r4242,4242
+needs_policy,504,,include,parsed,504,two_row_merged_header_flatten,2026-02,네이버,네이버\2월\2026년 2월 네이버 연재 정산상세.xlsx,False,2행 헤더 flatten + 통합/선투자 중복 검산 전 S2 출력 금지,contentsSelling_2026-03-04:parsed:h3:r504,504
+needs_policy,497,,include,parsed,497,two_row_merged_header_flatten,2026-02,네이버,네이버\2월\2026년 2월 네이버 장르 정산상세.xlsx,False,2행 헤더 flatten + 통합/선투자 중복 검산 전 S2 출력 금지,contentsSelling_2026-03-04:parsed:h3:r497,497
+needs_policy,1,,include,parsed,1,two_row_merged_header_flatten,2026-02,네이버,네이버\2월\선투자\2026년 2월 네이버 간딴 정산상세.xlsx,False,2행 헤더 flatten + 통합/선투자 중복 검산 전 S2 출력 금지,contentsSelling_2026-03-04:parsed:h3:r1,1
+needs_policy,1,,include,parsed,1,two_row_merged_header_flatten,2026-02,네이버,네이버\2월\선투자\2026년 2월 네이버 김악개 정산상세.xlsx,False,2행 헤더 flatten + 통합/선투자 중복 검산 전 S2 출력 금지,contentsSelling_2026-03-04:parsed:h3:r1,1
+needs_policy,1,,include,parsed,1,two_row_merged_header_flatten,2026-02,네이버,네이버\2월\선투자\2026년 2월 네이버 북홀릭 정산상세.xlsx,False,2행 헤더 flatten + 통합/선투자 중복 검산 전 S2 출력 금지,contentsSelling_2026-03-04:parsed:h3:r1,1
+needs_policy,0,,review_gate_not_default,parsed,4,two_row_merged_header_flatten,2026-02,네이버,네이버\2월\선투자\2026년 2월 네이버 선투자 정산상세(통합).xlsx,False,2행 헤더 flatten + 통합/선투자 중복 검산 전 S2 출력 금지,contentsSelling_2026-03-04:parsed:h3:r4,4
+needs_policy,1,,include,parsed,1,two_row_merged_header_flatten,2026-02,네이버,네이버\2월\선투자\2026년 2월 네이버 차라리 정산상세.xlsx,False,2행 헤더 flatten + 통합/선투자 중복 검산 전 S2 출력 금지,contentsSelling_2026-03-04:parsed:h3:r1,1
+needs_policy,2,,include,parsed,2,two_row_merged_header_flatten,2026-02,네이버,네이버\2월\일반\2026년 2월 네이버 일반 정산상세.xlsx,False,2행 헤더 flatten + 통합/선투자 중복 검산 전 S2 출력 금지,contentsSelling_2026-03-09:parsed:h3:r2,2
+needs_policy,1,,include,parsed,1,two_row_merged_header_flatten,2026-02,네이버,네이버\2월\킹묵추가\2026년 2월 네이버 킹묵 정산상세.xlsx,False,2행 헤더 flatten + 통합/선투자 중복 검산 전 S2 출력 금지,contentsSelling_2026-03-10:parsed:h3:r1,1
+needs_cancel_policy,74,,include,parsed,74,single_header,2026-02,노벨피아,노벨피아\2월\2026년 2월 노벨피아 정산상세.xlsx,False,취소금액 처리 정책 확정 후 S2 출력,일별 정산:parsed:h1:r74,74
+needs_policy,332,,include,parsed,332,single_header_variants,2026-02,모픽,모픽\2월\2026년 2월 모픽 정산상세.xlsx,False,총/순 매출 기준 확정 후 S2 출력,작품별정산:parsed:h1:r332,332
+needs_coin_policy,514,,include,parsed,514,merged_header_coin_table,2026-02,무툰,무툰\2월\2026년 2월 무툰 정산상세.xlsx,False,코인-원화 및 취소/공제 기준 확정 전 S2 출력 금지,Sheet:parsed:h2:r514,514
+needs_cancel_policy,118,,include,parsed,118,single_header_limited_columns,2026-02,문피아,문피아\2월\2026년 2월 문피아 정산상세.xlsx,False,취소/IOS/Google 포함 여부 확정 후 S2 출력,다우인큐브:parsed:h1:r118,118
+needs_policy,125,,include,parsed,125,single_header_variants,2026-02,미소설,미소설\2월\2026년 2월 미소설 정산상세.xlsx,False,지급액 컬럼 선택 기준 확정 후 S2 출력,cpexcel20260303100057:parsed:h1:r125,125
+needs_policy,0,,review_gate_not_default,parsed,125,single_header_variants,2026-02,미소설,미소설\2월\2026년 2월 미소설 정산상세_확장체크.xlsx,False,지급액 컬럼 선택 기준 확정 후 S2 출력,cpexcel20260303100057:parsed:h1:r125,125
+candidate_confirmed_after_reconcile,1192,,include,parsed,1192,single_header_variants,2026-02,밀리의서재,밀리의서재\2월\2026년 2월 밀리의서재 정산상세.xlsx,True,에피소드명 집계 단위 확정 + 총액 reconcile 후 출력,list:parsed:h1:r1192,1192
+needs_derived_sale_policy,192,,include,parsed,192,single_header_with_duplicate_file_filter,2026-02,부커스,부커스\2월\2026년 2월 부커스 정산상세.xlsx,False,판매금액 파생식 확정 전 S2 출력 금지,CP 콘텐츠별 정산:parsed:h1:r192,192
+candidate_confirmed_after_reconcile,63,,include,parsed,63,single_header_with_merged_cells,2026-02,블라이스,블라이스\2월\2026년 2월 블라이스 정산상세.xlsx,True,수수료 컬럼명 정규화 + 총액 reconcile 후 출력,CP정산20260305_095913:parsed:h1:r63,63
+candidate_confirmed_after_reconcile,7,,include,parsed,7,single_header,2026-02,스낵북,스낵북\2월\2026년 2월 스낵북 정산상세.xlsx,True,대표월 fixture + 총액 reconcile 후 출력,settle_list_202602_C262666768_2:parsed:h1:r7,7
+needs_subadapter_policy,176,,include,parsed,176,schema_signature_subadapters,2026-02,스토린랩,스토린랩\2월\2026년 2월 스토린랩 정산상세.xlsx,False,서브어댑터별 amount rule 확정 전 S2 출력 금지,정리:excluded_sheet:h:r0 ; 원스:parsed:h1:r151 ; 원스(북패스):parsed:h1:r25,176
+candidate_confirmed_after_reconcile,461,,include,parsed,461,single_header,2026-02,에피루스,에피루스\2월\2026년 2월 에피루스 정산상세.xlsx,True,대표월 fixture + 수수료 상계 정책 확인 후 출력,2026년02월정산내역_키다리스튜디오:parsed:h1:r461,461
+needs_policy,19607,,include,parsed,19607,wide_single_header_limited_columns,2026-02,원스토어,원스토어\2월\2026년 2월 원스토어 정산상세.xlsx,False,판매/정액제/취소/수수료 산식 확정 전 S2 출력 금지,multimedia:parsed:h1:r19607,19607
+needs_policy,883,,include,parsed,883,sheet_whitelist_single_header,2026-02,윌라,윌라\2월\2026년 2월 윌라 정산상세.xlsx,False,공급가/정가 판매금액 기준 확정 + 가격변동이력 제외 후 출력,sheet:parsed:h1:r883 ; 콘텐츠 가격 변동 이력:excluded_sheet:h:r0,883
+needs_derived_sale_policy,8,,include,parsed,8,schema_signature_variants,2026-02,조아라,조아라\2월\로맨스\2026년 2월 조아라 로맨스 단행본 정산상세.xlsx,False,단가 없는 그룹의 판매금액 정책 확정 전 S2 출력 금지,작품별 정산리스트_2026-2:parsed:h1:r8,8
+needs_derived_sale_policy,73,,include,parsed,73,schema_signature_variants,2026-02,조아라,조아라\2월\로맨스\2026년 2월 조아라 로맨스 정산상세.xlsx,False,단가 없는 그룹의 판매금액 정책 확정 전 S2 출력 금지,작품별 정산리스트_2026-2:parsed:h1:r73,73
+needs_derived_sale_policy,24,,include,parsed,24,schema_signature_variants,2026-02,조아라,조아라\2월\판무\2026년 2월 조아라 판무 단행본 정산상세.xlsx,False,단가 없는 그룹의 판매금액 정책 확정 전 S2 출력 금지,작품별 정산리스트_2026-2:parsed:h1:r24,24
+needs_derived_sale_policy,111,,include,parsed,111,schema_signature_variants,2026-02,조아라,조아라\2월\판무\2026년 2월 조아라 판무 정산상세.xlsx,False,단가 없는 그룹의 판매금액 정책 확정 전 S2 출력 금지,작품별 정산리스트_2026-2:parsed:h1:r111,111
+needs_derived_sale_policy,1,,include,parsed,1,schema_signature_variants,2026-02,조아라,조아라\2월\판무\2026년 2월 조아라 판무 후원쿠폰 정산상세.xlsx,False,단가 없는 그룹의 판매금액 정책 확정 전 S2 출력 금지,후원쿠폰-작품별 정산_2026-2:parsed:h1:r1,1
+needs_coin_policy,25,,include,parsed,25,merged_header_coin_table,2026-02,큐툰,큐툰\2월\2026년 2월 큐툰 정산상세.xlsx,False,코인-원화 및 취소/공제 기준 확정 전 S2 출력 금지,Sheet:parsed:h2:r25,25
+needs_tax_split_policy,45,,include,parsed,45,single_header_variants,2026-02,토스(구루컴퍼니),토스(구루컴퍼니)\2월\2026년 2월 토스 정산상세.xlsx,False,면세/과세 합산 기준 확정 후 출력,정산_공급사_202602:parsed:h1:r45,45
+needs_contextual_amount_policy,3331,,include,parsed,3331,cover_exclusion_contextual_amount_flatten,2026-02,판무림,판무림\2월\2026년 2월 판무림 정산상세.xlsx,False,상단 문맥+반복 판매금액 flatten 전 S2 출력 금지,표지:excluded_sheet:h:r0 ; 세부내역:parsed:h4:r3331,3331
+candidate_confirmed_after_reconcile,4,,include,parsed,4,single_header_with_small_sample_gate,2026-02,피플앤스토리,피플앤스토리\2월\2026년 2월 피플앤스토리 정산상세.xlsx,True,샘플 행 적음. 다른 월 1개 추가 fixture 후 출력,다운로드:parsed:h1:r4,4
+needs_purchase_rental_policy,355,,include,parsed,355,single_header,2026-02,하이북,하이북\2월\2026년 2월 하이북 정산상세.xlsx,False,구매/대여 합산 단위 확정 후 출력,정산리스트:parsed:h1:r355,355
+needs_section_policy,9253,,include,parsed,9253,multi_section_repeated_header_parser,2026-02,한아름,한아름\2월\2026년 2월 한아름 정산상세.xlsx,False,구간 파서 + 시간/건당 과금 정책 확정 전 S2 출력 금지,Sheet1:parsed:hrepeated:r9253,9253
