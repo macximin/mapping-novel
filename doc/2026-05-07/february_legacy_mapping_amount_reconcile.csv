@@ -1,0 +1,38 @@
+﻿platform,period,adapter_file_count,legacy_mapping_file_count,adapter_default_rows,legacy_mapping_rows,adapter_sale_sum,legacy_sale_sum,sale_delta,adapter_settlement_sum,legacy_settlement_sum,settlement_delta,adapter_offset_sum,legacy_offset_sum,offset_delta,amount_rule_status,s2_amount_policy_locked,reconcile_status,legacy_files
+교보,2026-02,0,0,0,0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,needs_reconcile,False,no_legacy_mapping,
+구글,2026-02,1,1,4242,1445,2741822.2,4534300.0,-1792477.8,2741822.2,3080893.0,-339070.8,93825.9,0.0,93825.9,needs_policy,False,mismatch_needs_policy_review,구글\2월\2026년 2월 구글 정산_매핑.xlsx
+네이버,2026-02,9,2,1008,2695,128075506.0,0.0,128075506.0,0.0,79324378.13999999,-79324378.14,168.0,0.0,168.0,needs_policy,False,mismatch_needs_policy_review,네이버\2월\2026년 2월 네이버 연재 정산_매핑.xlsx | 네이버\2월\2026년 2월 네이버 장르 정산_매핑.xlsx
+노벨피아,2026-02,1,1,74,74,217000.0,0.0,217000.0,135135.0,135135.0,0.0,-2500.0,0.0,-2500.0,needs_cancel_policy,False,settlement_match_only,노벨피아\2월\2026년 2월 노벨피아 정산_매핑.xlsx
+로망띠끄,2026-02,0,0,0,0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,candidate_confirmed_after_reconcile,True,no_legacy_mapping,
+리디북스,2026-02,0,0,0,0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,needs_policy,False,no_legacy_mapping,
+모픽,2026-02,1,1,332,332,3564300.0,0.0,3564300.0,2245509.0,0.0,2245509.0,0.0,0.0,0.0,needs_policy,False,mismatch_needs_policy_review,모픽\2월\2026년 2월 모픽 정산_매핑.xlsx
+무툰,2026-02,1,1,514,514,583944.0,0.0,583944.0,58394400.0,40876080.0,17518320.0,0.0,0.0,0.0,needs_coin_policy,False,mismatch_needs_policy_review,무툰\2월\2026년 2월 무툰 정산_매핑.xlsx
+문피아,2026-02,1,1,118,118,13718807.0,0.0,13718807.0,14969906.0,14969906.0,0.0,32.0,0.0,32.0,needs_cancel_policy,False,settlement_match_only,문피아\2월\2026년 2월 문피아 정산_매핑.xlsx
+미소설,2026-02,2,1,125,125,3388300.0,0.0,3388300.0,0.0,2371810.0,-2371810.0,0.0,0.0,0.0,needs_policy,False,mismatch_needs_policy_review,미소설\2월\2026년 2월 미소설 정산_매핑.xlsx
+미스터블루,2026-02,0,0,0,0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,blocked_until_settlement_basis,False,no_legacy_mapping,
+밀리의서재,2026-02,1,1,1192,399,5117280.0,0.0,5117280.0,5117280.0,5117280.0,0.0,0.0,0.0,0.0,candidate_confirmed_after_reconcile,True,settlement_match_only,밀리의서재\2월\2026년 2월 밀리의서재 정산_매핑.xlsx
+보인&국립장애인도서관,2026-02,0,0,0,0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,blocked_non_sales,False,no_legacy_mapping,
+부커스,2026-02,1,1,192,192,4320000.0,328500.0,3991500.0,197100.0,197100.0,0.0,0.0,0.0,0.0,needs_derived_sale_policy,False,settlement_match_only,부커스\2월\2026년 2월 부커스 정산_매핑.xlsx
+북큐브,2026-02,0,0,0,0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,candidate_confirmed_after_reconcile,True,no_legacy_mapping,
+북팔,2026-02,0,0,0,0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,candidate_confirmed_after_reconcile,True,no_legacy_mapping,
+블라이스,2026-02,1,1,63,63,491800.0,0.0,491800.0,322461.0,322461.0,0.0,0.0,0.0,0.0,candidate_confirmed_after_reconcile,True,settlement_match_only,블라이스\2월\2026년 2월 블라이스 정산_매핑.xlsx
+스낵북,2026-02,1,0,7,0,700.0,0.0,700.0,490.0,0.0,490.0,0.0,0.0,0.0,candidate_confirmed_after_reconcile,True,no_legacy_mapping,
+스토린랩,2026-02,1,1,176,176,150067704.0,0.0,150067704.0,175948.501,144305.0,31643.501,0.0,0.0,0.0,needs_subadapter_policy,False,mismatch_needs_policy_review,스토린랩\2월\2026년 2월 스토린랩 정산_매핑.xlsx
+신영미디어,2026-02,0,0,0,0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,candidate_confirmed_after_reconcile,True,no_legacy_mapping,
+알라딘,2026-02,0,0,0,0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,needs_cancel_policy,False,no_legacy_mapping,
+알라딘 종이책,2026-02,0,0,0,0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,blocked_non_content_ledger,False,no_legacy_mapping,
+에이블리,2026-02,0,0,0,0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,candidate_confirmed_after_reconcile,True,no_legacy_mapping,
+에피루스,2026-02,1,1,461,461,1390677.0,1390677.0,0.0,753708.0,753708.0,0.0,0.0,0.0,0.0,candidate_confirmed_after_reconcile,True,sale_settlement_offset_match,에피루스\2월\2026년 2월 에피루스 정산_매핑.xlsx
+예스24,2026-02,0,0,0,0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,needs_policy,False,no_legacy_mapping,
+올툰,2026-02,0,0,0,0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,needs_fee_policy,False,no_legacy_mapping,
+원스토어,2026-02,1,1,19607,19607,0.0,19149726.0,-19149726.0,12282992.730999999,12282992.730999999,0.0,0.0,0.0,0.0,needs_policy,False,settlement_match_only,원스토어\2월\2026년 2월 원스토어 정산_매핑.xlsx
+윌라,2026-02,1,1,883,119,2472300.0,378700.0,2093600.0,302960.0,302960.0,0.0,0.0,0.0,0.0,needs_policy,False,settlement_match_only,윌라\2월\2026년 2월 윌라 정산_매핑.xlsx
+조아라,2026-02,5,2,217,200,18938.0,6758470.0,-6739532.0,3928192.0,3928192.0,0.0,0.0,0.0,0.0,needs_derived_sale_policy,False,settlement_match_only,조아라\2월\로맨스\2026년 2월 조아라 로맨스 통합 정산_매핑.xlsx | 조아라\2월\판무\2026년 2월 조아라 판무 통합 정산_매핑.xlsx
+카카오,2026-02,0,0,0,0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,needs_tax_policy,False,no_legacy_mapping,
+큐툰,2026-02,1,1,25,25,1222.0,0.0,1222.0,122200.0,85540.0,36660.0,0.0,0.0,0.0,needs_coin_policy,False,mismatch_needs_policy_review,큐툰\2월\2026년 2월 큐툰 정산_매핑.xlsx
+토스(구루컴퍼니),2026-02,1,1,45,45,238800.0,0.0,238800.0,136258.0,136258.0,0.0,44085.600000000006,0.0,44085.6,needs_tax_split_policy,False,settlement_match_only,토스(구루컴퍼니)\2월\2026년 2월 토스 정산_매핑.xlsx
+판무림,2026-02,1,1,3331,3331,0.0,2906300.0,-2906300.0,0.0,2034410.0,-2034410.0,189290.0,0.0,189290.0,needs_contextual_amount_policy,False,mismatch_needs_policy_review,판무림\2월\2026년 2월 판무림 정산_매핑.xlsx
+피우리(누온),2026-02,0,0,0,0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,candidate_confirmed_after_reconcile,True,no_legacy_mapping,
+피플앤스토리,2026-02,1,1,4,4,25400.0,25400.0,0.0,10668.0,10668.0,0.0,0.0,0.0,0.0,candidate_confirmed_after_reconcile,True,sale_settlement_offset_match,피플앤스토리\2월\2026년 2월 피플앤스토리 정산_매핑.xlsx
+하이북,2026-02,1,2,355,787,3298200.0,3500700.0,-202500.0,2308740.0,2450490.0,-141750.0,0.0,0.0,0.0,needs_purchase_rental_policy,False,mismatch_needs_policy_review,하이북\2월\2026년 2월 하이북 정산_매핑.xlsx | 하이북\2월\하이북_매핑코드.xlsx
+한아름,2026-02,1,1,9253,9245,0.0,2630350.999999999,-2630351.0,0.0,1841245.6999999995,-1841245.7,0.0,0.0,0.0,needs_section_policy,False,mismatch_needs_policy_review,한아름\2월\2026년 2월 한아름 정산_2_매핑.xlsx

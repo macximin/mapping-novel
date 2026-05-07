@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.streamlit/*
+!.streamlit/config.toml
+.venv/
+venv/
+*.log
+.env
+.env.*
+!.env.example
+.tmp_kiss_assets/
+temp/
+data/kiss_payment_settlement_cache*.csv
+data/kiss_payment_settlement_s2_lookup*.csv
+data/kiss_refresh_history*.sqlite*
+data/kiss_refresh*.lock/
+data/s2_refresh*.lock/

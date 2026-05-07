@@ -1,0 +1,80 @@
+{
+  "source": "\\\\172.16.10.120\\소설사업부\\판무팀_ssot\\100_계산서_매출등록_자료\\무툰\\4월\\2026년 4월 무툰 정산상세.xlsx",
+  "sheet": "Sheet",
+  "max_row": 542,
+  "max_column": 15,
+  "merged_cell_ranges": 14,
+  "header_rows": [
+    1,
+    2,
+    3
+  ],
+  "sum_row": 4,
+  "data_start_row": 6,
+  "parsed_data_rows": 537,
+  "row_issue_count": 0,
+  "issue_counts": {},
+  "sum_match": {
+    "used_coin_count": {
+      "sum_row": 363063,
+      "parsed_rows_sum": 363063,
+      "matches": true
+    },
+    "used_coin_amount": {
+      "sum_row": 36306300,
+      "parsed_rows_sum": 36306300,
+      "matches": true
+    },
+    "cancel_coin_count": {
+      "sum_row": 0,
+      "parsed_rows_sum": 0,
+      "matches": true
+    },
+    "cancel_coin_amount": {
+      "sum_row": 0,
+      "parsed_rows_sum": 0,
+      "matches": true
+    },
+    "net_coin_count": {
+      "sum_row": 363063,
+      "parsed_rows_sum": 363063,
+      "matches": true
+    },
+    "gross_sales_amount": {
+      "sum_row": 36306300,
+      "parsed_rows_sum": 36306300,
+      "matches": true
+    },
+    "payment_fee_amount": {
+      "sum_row": 0,
+      "parsed_rows_sum": 0,
+      "matches": true
+    },
+    "event_fee_amount": {
+      "sum_row": 0,
+      "parsed_rows_sum": 0,
+      "matches": true
+    },
+    "settlement_calc_amount": {
+      "sum_row": 36306300,
+      "parsed_rows_sum": 36306300,
+      "matches": true
+    },
+    "settlement_amount": {
+      "sum_row": 25414410,
+      "parsed_rows_sum": 25414410,
+      "matches": true
+    }
+  },
+  "can_parse_to_normalized_schema": true,
+  "can_project_to_s2_now": false,
+  "s2_blocker": "amount_rule_status=needs_coin_policy; mapping to 판매채널콘텐츠ID not tested",
+  "recommended_candidate_mapping": {
+    "raw_title": "E 타이틀",
+    "raw_author": "C 작가",
+    "gross_sales_amount": "K 합계-금액",
+    "settlement_base_amount_candidate": "N 정산정보-계산금액 or O 정산정보-정산금액 정책 필요",
+    "offset_amount_candidate": "L 공제수수료-결제 + M 공제수수료-이벤트"
+  },
+  "sanitized_probe_csv": "C:\\Users\\wjjo\\Desktop\\mapping-novel\\doc\\2026-05-07\\mutoon_2026_04_normalization_probe_sanitized.csv"
+}

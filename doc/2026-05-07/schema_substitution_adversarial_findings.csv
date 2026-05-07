@@ -1,0 +1,18 @@
+﻿audit_round,round_name,severity,scope,failure_mode,evidence,impact,mitigation,decision
+1,헤더 치환 공격,critical,전체,단일 alias dict로 source header를 표준 필드에 바로 rename,전수조사 80개 플랫폼-스키마 그룹 중 manual_review 34개. 헤더 없는/위치 다른/병합된 시트 존재.,제목/금액 컬럼을 잘못 잡아 S2 금액 오전송 가능,adapter detect 단계에서 platform+sheet+signature+required headers를 모두 확인하고 unknown signature는 quarantine,plain rename 금지
+1,헤더 치환 공격,high,구글,영문 `Title`/`Publisher Revenue`가 한국어 alias에서 누락,4월 GoogleSalesTransactionReport는 row 1 영문 transaction export,구글 행 전체가 매칭 후보에서 빠지거나 금액 누락,Google 전용 fixed-column adapter,special adapter 필수
+1,헤더 치환 공격,critical,네이버/판무림,동일 헤더명이 반복되어 문맥 없이 의미 상실,"네이버는 2행 병합 헤더, 판무림은 `판매금액`이 여러 번 반복",소장/대여/정액제/포인트 금액을 뒤섞음,상위 헤더+하위 헤더 flatten. 원본 문맥 row 보존,contextual header flatten 필수
+1,헤더 치환 공격,critical,한아름,첫 번째 좋은 헤더 후보만 선택하면 요약 헤더를 상세 헤더로 오인,"4월 한아름 row 27은 `시간매출/건당매출/총매출액/배분률/정산금액`, 이후 row 50/399/5033 등에 반복 상세 헤더",작품명 없는 요약표를 매핑 입력으로 내거나 상세 구간 누락,반복 섹션 파서. header 후보를 여러 개 허용하고 구간 단위 parse,generic header finder 금지
+1,헤더 치환 공격,medium,윌라,보조 시트와 본문 시트 구분 누락,전수조사 기준 `sheet`와 `콘텐츠 가격 변동 이력` 2시트. 4월은 없음,가격변동 이력을 정산 데이터로 오인,대표 fallback 월에서 sheet whitelist 확정,fallback audit 필수
+2,금액 의미 공격,critical,전체,같은 이름의 금액 컬럼을 플랫폼 공통 의미로 취급,"`합계`, `정산금액`, `판매금액`, `수수료`가 플랫폼마다 판매/정산/상계 후보로 갈림",S2 4컬럼 중 판매금액/정산기준액/상계금액이 뒤바뀜,amount_rule_id와 amount_rule_status를 필수화. confirmed 전 S2 출력 금지,semantic slot layer 필수
+2,금액 의미 공격,high,부커스,판매금액 직접 컬럼이 없는데 정가/열람횟수/정산금액 중 임의 선택,"4월 부커스 헤더: 정가, 정산율(%), 정산 금액(원), 열람 횟수",판매금액이 과소/과대 파생될 수 있음,판매금액 파생식 확정 전 `needs_policy`,S2 projection 보류
+2,금액 의미 공격,high,조아라,단행본 스키마에는 단가가 없어 판매금액 산출 불가,4월 조아라 7컬럼 단행본: 작품명/작품코드/작가명/판매건수/비율/정산금액/정산일,정산금액을 판매금액으로 잘못 대체할 위험,단행본 전용 rule. 판매금액 정책 확정 전 blocked,amount policy 필요
+2,금액 의미 공격,high,무툰/큐툰,코인을 원화 판매금액으로 단정,헤더: 사용코인/취소코인/합계/공제수수료/정산총액,코인 환산/취소/공제 처리 오류,코인-원화 관계 확인 및 공통 adapter rule,needs_policy
+2,금액 의미 공격,high,네이버,`합계`와 `마켓수수료(추정치)`의 S2 대응 미확정,"4월 네이버는 71열 병합 구조, 정산금액 없는 그룹 다수",판매금액과 정산기준액을 같은 값으로 넣을 위험,월별 총액 reconcile 후 합계/수수료 산식 확정,needs_policy
+2,금액 의미 공격,medium,구글,세금 차감 전후 금액 선택 오류,"Publisher Revenue, Payment Amount, 미국 원천징수세, 법인세 차감 후 금액 존재",법인세 전후 기준 혼동,구글 금액 기준을 업무 정책으로 문서화,needs_policy
+3,실행 안전 공격,critical,전체,parsed row를 검증 없이 S2 출력,matched만 보더라도 amount_rule_status가 불확정일 수 있음,정상 매칭된 잘못된 금액이 전송됨,"S2 출력 gate: schema_status=parsed, row_status=data, amount_rule_status in confirmed, match_status=matched",hard gate 필수
+3,실행 안전 공격,high,부커스/네이버,복사본/통합본/개별 파일 중복 포함,"부커스 `- 복사본`, 네이버 `선투자 정산상세(통합)` 감지",동일 매출 중복 집계,파일명 denylist+checksum+row total duplicate check,default exclude/review
+3,실행 안전 공격,high,판무림,커버/요약 시트를 상세로 포함,"4월 판무림 `표지` 시트는 aux, 실제는 `세부내역`",정산 요약 문구가 데이터 행으로 들어감,sheet whitelist: 세부내역 only,표지 exclude
+3,실행 안전 공격,high,한아름,합계/소계/계산서 안내 행 포함,한아름은 합계/계산서 안내/반복 헤더가 같은 시트에 존재,요약행이 작품 매출로 들어감,row classifier: data/subtotal/total/note/header 구분,special parser + row gate
+3,실행 안전 공격,medium,4월 샘플 없는 21개,catalog상 adapter 후보가 있어도 대표 월 검증 없이 구현,리디북스/카카오/토스 등은 4월 원형 없음이나 catalog 신호 존재,월별 변형을 놓친 상태로 production adapter 작성,최근월 fallback 대표 감리 후 구현,no_april gate
+3,실행 안전 공격,medium,전체,0 자동 대입 남용,offset 후보가 없거나 의미 불확실한 플랫폼 다수,상계금액 누락을 0으로 덮어 감사 추적 불가,`offset_amount=0`은 rule_id로 확인된 경우만 허용,missing != zero

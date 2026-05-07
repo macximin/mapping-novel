@@ -1,0 +1,19 @@
+{
+  "audit_date": "2026-05-07",
+  "source_root": "\\\\172.16.10.120\\소설사업부\\판무팀_ssot\\100_계산서_매출등록_자료",
+  "platform_total": 37,
+  "april_available_platforms": 16,
+  "no_april_source_platforms": 21,
+  "audit_bucket_counts": {
+    "A_generic_adapter_candidate": 8,
+    "B_amount_semantics_required": 4,
+    "C_special_adapter_required": 4,
+    "D_no_april_source": 21
+  },
+  "april_file_total": 28,
+  "april_sheet_total": 29,
+  "outputs": [
+    "legacy_settlement_april_representative_audit.csv",
+    "legacy_settlement_april_representative_sheet_findings.csv"
+  ]
+}

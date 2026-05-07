@@ -1,0 +1,21 @@
+{
+  "period": "2026-02",
+  "platform_total": 37,
+  "period_file_count": 35,
+  "platforms_with_period_source": 22,
+  "platform_materialization_status_counts": {
+    "materialized_default_feed": 22,
+    "no_period_source": 15
+  },
+  "mapping_engine_smoke_status_counts": {
+    "pass_after_substitution": 7,
+    "pass_with_review": 15,
+    "skipped_no_default_feed": 15
+  },
+  "s2_projection_status_counts": {
+    "s2_projection_blocked_by_amount_or_policy": 24,
+    "s2_projection_blocked_non_s2_source": 2,
+    "s2_projection_candidate_after_policy": 11
+  },
+  "parse_error_count": 0
+}

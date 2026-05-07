@@ -1,0 +1,33 @@
+{
+  "audit_date": "2026-05-07",
+  "source_root": "\\\\172.16.10.120\\소설사업부\\판무팀_ssot\\100_계산서_매출등록_자료",
+  "platforms": 37,
+  "full_catalog_schema_groups": 80,
+  "full_catalog_status_counts": {
+    "adapter_candidate": 46,
+    "manual_review": 34
+  },
+  "april_bucket_counts": {
+    "D_no_april_source": 21,
+    "C_special_adapter_required": 4,
+    "A_generic_adapter_candidate": 8,
+    "B_amount_semantics_required": 4
+  },
+  "findings_by_round": {
+    "1": 5,
+    "2": 6,
+    "3": 6
+  },
+  "findings_by_severity": {
+    "critical": 5,
+    "high": 8,
+    "medium": 4
+  },
+  "recommended_method": "adapter registry + canonical semantic slot schema + S2 projection hard gates",
+  "outputs": [
+    "schema_substitution_target_schema_v1.csv",
+    "schema_substitution_platform_strategy.csv",
+    "schema_substitution_adversarial_findings.csv",
+    "schema_substitution_adversarial_audit.md"
+  ]
+}
