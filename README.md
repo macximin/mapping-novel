@@ -13,12 +13,21 @@ streamlit run app.py
 
 Streamlit Cloud의 메인 파일은 `app.py`입니다.
 
-S2 최신화를 Cloud에서 실행하려면 앱 Secrets에 아래 값을 넣습니다. 로컬에서는 기존처럼 `.env`를 써도 되고, `.streamlit/secrets.toml`을 써도 됩니다.
+S2 기준 전체 교체는 앱 사이드바에서 S2 ID/PW를 입력한 뒤 실행할 수 있습니다. 입력값은 이번 Streamlit 세션의 메모리에서만 사용하고, repo나 앱 Secrets에는 저장하지 않습니다. 브라우저 비밀번호 관리자의 자동완성은 사용할 수 있습니다.
+
+운영자가 자동 최신화용 공용 접속 정보를 앱에 미리 넣고 싶을 때만 Streamlit Secrets에 아래 값을 넣습니다. 로컬에서는 기존처럼 `.env`를 써도 되고, `.streamlit/secrets.toml`을 써도 됩니다.
 
 ```toml
 S2_API_BASE_URL = "https://kiss-api.kld.kr"
 S2_ID = "..."
 S2_PW = "..."
+```
+
+이미 발급된 Bearer token을 쓰는 경우에는 ID/PW 대신 아래 값을 넣으면 `/user/login` 호출을 건너뜁니다. 토큰 값은 원문 token 또는 `Bearer ...` 형식 모두 허용합니다.
+
+```toml
+S2_API_BASE_URL = "https://kiss-api.kld.kr"
+S2_ACCESS_TOKEN = "..."
 ```
 
 예시는 `.streamlit/secrets.example.toml`에 있습니다. 실제 접속 정보는 git에 올리지 않습니다.

@@ -8,12 +8,17 @@ from typing import Any
 S2_USERNAME_KEYS = ("KLD_LOGIN_ID", "S2_ID", "IPS_ID", "KISS_ID", "KIPM_ID")
 S2_PASSWORD_KEYS = ("KLD_LOGIN_PW", "S2_PW", "IPS_PW", "KISS_PW", "KIPM_PW")
 S2_API_BASE_URL_KEYS = ("S2_API_BASE_URL", "KISS_API_BASE_URL")
+S2_ACCESS_TOKEN_KEYS = ("S2_ACCESS_TOKEN", "S2_TOKEN", "KISS_ACCESS_TOKEN", "KISS_TOKEN", "KIPM_ACCESS_TOKEN")
 S2_SECRET_SECTIONS = ("s2", "S2", "ips", "IPS", "auth", "credentials")
 SECTION_USERNAME_KEYS = ("id", "user", "username", "login_id", "login")
 SECTION_PASSWORD_KEYS = ("pw", "password", "login_pw")
 SECTION_API_BASE_URL_KEYS = ("api_base_url", "base_url", "url")
+SECTION_ACCESS_TOKEN_KEYS = ("access_token", "token", "bearer_token")
 
-S2_AUTH_ERROR_MESSAGE = "S2/IPS 접속 정보가 없습니다. 로컬 .env, 환경변수, 또는 Streamlit Secrets를 설정하세요."
+S2_AUTH_ERROR_MESSAGE = (
+    "S2/IPS 접속 정보가 없습니다. 앱 사이드바에 S2 ID/PW를 입력하거나 "
+    "로컬 .env, 환경변수, 또는 Streamlit Secrets에 ID/PW 또는 access token을 설정하세요."
+)
 
 
 def read_env_file(path: str | Path) -> dict[str, str]:
@@ -56,13 +61,23 @@ def first_env_value(*keys: str) -> str:
 
 
 def has_s2_credentials(config: dict[str, Any]) -> bool:
+    if first_config_value(config, S2_ACCESS_TOKEN_KEYS):
+        return True
     return bool(first_config_value(config, S2_USERNAME_KEYS) and first_config_value(config, S2_PASSWORD_KEYS))
+
+
+def normalize_s2_login_values(username: object, password: object) -> dict[str, str]:
+    username_text = str(username or "").strip()
+    password_text = str(password or "").strip()
+    if not username_text or not password_text:
+        return {}
+    return {"S2_ID": username_text, "S2_PW": password_text}
 
 
 def normalize_s2_secret_values(secrets: object) -> dict[str, str]:
     values: dict[str, str] = {}
 
-    _copy_exact_keys(values, secrets, S2_USERNAME_KEYS + S2_PASSWORD_KEYS + S2_API_BASE_URL_KEYS)
+    _copy_exact_keys(values, secrets, S2_USERNAME_KEYS + S2_PASSWORD_KEYS + S2_API_BASE_URL_KEYS + S2_ACCESS_TOKEN_KEYS)
     _copy_section_alias(values, secrets)
     return values
 
@@ -72,10 +87,11 @@ def _copy_section_alias(values: dict[str, str], secrets: object) -> None:
         section = _mapping_value(secrets, section_name)
         if section is None:
             continue
-        _copy_exact_keys(values, section, S2_USERNAME_KEYS + S2_PASSWORD_KEYS + S2_API_BASE_URL_KEYS)
+        _copy_exact_keys(values, section, S2_USERNAME_KEYS + S2_PASSWORD_KEYS + S2_API_BASE_URL_KEYS + S2_ACCESS_TOKEN_KEYS)
         _copy_alias(values, "S2_ID", section, SECTION_USERNAME_KEYS)
         _copy_alias(values, "S2_PW", section, SECTION_PASSWORD_KEYS)
         _copy_alias(values, "S2_API_BASE_URL", section, SECTION_API_BASE_URL_KEYS)
+        _copy_alias(values, "S2_ACCESS_TOKEN", section, SECTION_ACCESS_TOKEN_KEYS)
 
 
 def _copy_exact_keys(values: dict[str, str], source: object, keys: tuple[str, ...]) -> None:

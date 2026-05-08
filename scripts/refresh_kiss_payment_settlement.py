@@ -22,6 +22,7 @@ from kiss_payment_settlement import (
     save_summary,
 )
 from s2_auth import (
+    S2_ACCESS_TOKEN_KEYS,
     S2_API_BASE_URL_KEYS,
     S2_AUTH_ERROR_MESSAGE,
     S2_PASSWORD_KEYS,
@@ -190,13 +191,18 @@ def fetch_payment_settlement_rows(
 
 
 def create_authenticated_session() -> requests.Session:
+    api_base_url = first_env_value(*S2_API_BASE_URL_KEYS) or KISS_API_BASE_URL
+    api_base_url = api_base_url.rstrip("/")
+
+    access_token = first_env_value(*S2_ACCESS_TOKEN_KEYS)
+    if access_token:
+        return create_bearer_session(api_base_url, access_token)
+
     username = first_env_value(*S2_USERNAME_KEYS)
     password = first_env_value(*S2_PASSWORD_KEYS)
     if not username or not password:
         raise KISSRefreshError(S2_AUTH_ERROR_MESSAGE)
 
-    api_base_url = first_env_value(*S2_API_BASE_URL_KEYS) or KISS_API_BASE_URL
-    api_base_url = api_base_url.rstrip("/")
     session = requests.Session()
     session.headers.update(
         {
@@ -219,6 +225,28 @@ def create_authenticated_session() -> requests.Session:
     session.headers["Authorization"] = f"Bearer {token}"
     session.headers["X-KISS-API-BASE-URL"] = api_base_url
     return session
+
+
+def create_bearer_session(api_base_url: str, access_token: str) -> requests.Session:
+    session = requests.Session()
+    session.headers.update(
+        {
+            "Accept": "application/json, text/plain, */*",
+            "Content-Type": "application/json;charset=utf-8",
+            "X-Requested-With": "XMLHttpRequest",
+            "Authorization": bearer_authorization_value(access_token),
+            "X-KISS-API-BASE-URL": api_base_url,
+        }
+    )
+    return session
+
+
+def bearer_authorization_value(access_token: str) -> str:
+    token = access_token.strip()
+    if token.lower().startswith("bearer "):
+        return token
+    return f"Bearer {token}"
+
 
 def extract_jwt(payload: Any) -> str:
     if isinstance(payload, str) and JWT_PATTERN.match(payload):

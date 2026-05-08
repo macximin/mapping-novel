@@ -23,7 +23,13 @@ from settlement_adapters import (
     summarize_normalization,
 )
 from s2_transfer import build_s2_transfer, export_s2_transfer
-from s2_auth import S2_AUTH_ERROR_MESSAGE, has_s2_credentials, normalize_s2_secret_values, read_env_file
+from s2_auth import (
+    S2_AUTH_ERROR_MESSAGE,
+    has_s2_credentials,
+    normalize_s2_login_values,
+    normalize_s2_secret_values,
+    read_env_file,
+)
 
 
 ROOT = Path(__file__).resolve().parent
@@ -35,6 +41,8 @@ S2_REFRESH_SCRIPT = ROOT / "scripts" / "refresh_kiss_payment_settlement.py"
 S2_ENV_FILE = ROOT / ".env"
 S2_FALLBACK_START_DATE = date(1900, 1, 1)
 AUTO_PLATFORM_OPTION = "엑셀 파일명으로 자동감지"
+S2_SESSION_USERNAME_KEY = "s2_session_username"
+S2_SESSION_PASSWORD_KEY = "s2_session_password"
 
 
 @st.cache_data(show_spinner=False)
@@ -59,17 +67,26 @@ def streamlit_s2_secret_values() -> dict[str, str]:
         return {}
 
 
+def session_s2_login_values() -> dict[str, str]:
+    return normalize_s2_login_values(
+        st.session_state.get(S2_SESSION_USERNAME_KEY),
+        st.session_state.get(S2_SESSION_PASSWORD_KEY),
+    )
+
+
 def s2_runtime_auth_config() -> dict[str, str]:
     config: dict[str, str] = {}
     config.update(read_env_file(S2_ENV_FILE))
     config.update(dict(os.environ))
     config.update(streamlit_s2_secret_values())
+    config.update(session_s2_login_values())
     return config
 
 
 def s2_refresh_environment() -> dict[str, str]:
     runtime_env = os.environ.copy()
     runtime_env.update(streamlit_s2_secret_values())
+    runtime_env.update(session_s2_login_values())
     return runtime_env
 
 
@@ -279,6 +296,24 @@ with st.sidebar:
         st.success(st.session_state.pop("s2_refresh_message"))
     if "s2_refresh_error" in st.session_state:
         st.error(st.session_state.pop("s2_refresh_error"))
+
+    with st.expander("S2 최신화 로그인", expanded=not has_s2_credentials(s2_runtime_auth_config())):
+        st.caption("S2 최신화에만 사용합니다. 앱은 ID/PW를 파일이나 Secrets에 저장하지 않습니다.")
+        with st.form("s2_session_login_form"):
+            st.text_input("S2 ID", key=S2_SESSION_USERNAME_KEY, autocomplete="username")
+            st.text_input("S2 PW", key=S2_SESSION_PASSWORD_KEY, type="password", autocomplete="current-password")
+            auth_submitted = st.form_submit_button("이번 세션에 사용", use_container_width=True)
+        if auth_submitted:
+            if has_s2_credentials(session_s2_login_values()):
+                st.success("이번 세션의 S2 ID/PW가 준비되었습니다.")
+            else:
+                st.warning("S2 ID와 PW를 모두 입력하세요.")
+        if has_s2_credentials(session_s2_login_values()):
+            st.caption("이번 세션의 S2 ID/PW가 설정되어 있습니다.")
+            if st.button("세션 로그인 지우기", use_container_width=True):
+                st.session_state.pop(S2_SESSION_USERNAME_KEY, None)
+                st.session_state.pop(S2_SESSION_PASSWORD_KEY, None)
+                st.rerun()
 
     refresh_disabled = not has_s2_credentials(s2_runtime_auth_config())
     if refresh_disabled:
