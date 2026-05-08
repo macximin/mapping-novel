@@ -569,17 +569,52 @@ def inject_compact_layout_css() -> None:
             margin-bottom: 0.2rem;
         }
         section[data-testid="stFileUploaderDropzone"] {
-            min-height: 3.1rem;
+            min-height: 2.7rem;
             padding: 0.35rem 0.65rem;
             overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.25rem;
+            border-style: dashed;
+            border-radius: 0.2rem;
+            background: #ffffff;
+        }
+        section[data-testid="stFileUploaderDropzone"]::before {
+            content: "📎 여기에 첨부 파일을 끌어 오세요. 또는";
+            color: #4b5563;
+            font-size: 0.88rem;
+            pointer-events: none;
         }
         section[data-testid="stFileUploaderDropzone"] > div {
             gap: 0.35rem;
         }
         section[data-testid="stFileUploaderDropzone"] button {
-            min-height: 2rem;
-            padding: 0.25rem 0.7rem;
+            min-height: 1.6rem;
+            width: 3.8rem;
+            padding: 0;
+            border: 0;
+            background: transparent;
+            box-shadow: none;
+            color: transparent;
+            position: relative;
             white-space: nowrap;
+        }
+        section[data-testid="stFileUploaderDropzone"] button:hover,
+        section[data-testid="stFileUploaderDropzone"] button:focus {
+            background: transparent;
+            border: 0;
+            box-shadow: none;
+        }
+        section[data-testid="stFileUploaderDropzone"] button::after {
+            content: "파일선택";
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #1f2937;
+            font-weight: 600;
+            text-decoration: underline;
         }
         section[data-testid="stFileUploaderDropzone"] small,
         div[data-testid="stFileUploaderDropzoneInstructions"] {
