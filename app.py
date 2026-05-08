@@ -188,6 +188,19 @@ def run_s2_refresh(mode: str, start_date: date | None = None, end_date: date | N
     return subprocess.run(command, cwd=ROOT, text=True, capture_output=True, timeout=900, env=s2_refresh_environment())
 
 
+def run_s2_auth_check() -> subprocess.CompletedProcess[str]:
+    command = [
+        sys.executable,
+        str(S2_REFRESH_SCRIPT),
+        "--env-file",
+        str(S2_ENV_FILE),
+        "--check-auth-only",
+        "--auth-timeout",
+        "10",
+    ]
+    return subprocess.run(command, cwd=ROOT, text=True, capture_output=True, timeout=30, env=s2_refresh_environment())
+
+
 def run_s2_full_replace() -> tuple[subprocess.CompletedProcess[str], str]:
     completed = run_s2_refresh("full-replace")
     if completed.returncode == 0 or not should_retry_s2_with_date_window(completed):
@@ -208,6 +221,8 @@ def s2_refresh_error_message(completed: subprocess.CompletedProcess[str], refres
     output = f"{completed.stdout}\n{completed.stderr}"
     if looks_like_s2_auth_failure(output):
         return f"{S2_AUTH_FAILURE_HINT} API 다운로드를 진행하지 못했습니다. ({refresh_scope})"
+    if refresh_scope == "로그인 확인":
+        return f"S2 로그인 확인 실패: API 다운로드를 시작하지 않았습니다. ({refresh_scope})"
     return f"S2 기준 전체 교체 실패: {refresh_scope}"
 
 
@@ -398,7 +413,13 @@ with st.sidebar:
             auth_submitted = st.form_submit_button("이번 세션에 사용", use_container_width=True)
         if auth_submitted:
             if has_s2_credentials(session_s2_login_values()):
-                st.success("이번 세션의 S2 ID/PW가 준비되었습니다.")
+                with st.spinner("S2 로그인 확인 중"):
+                    auth_completed = run_s2_auth_check()
+                if auth_completed.returncode == 0:
+                    st.success("S2 로그인 확인 완료. 이번 세션에서 사용할 수 있습니다.")
+                else:
+                    st.error(s2_refresh_error_message(auth_completed, "로그인 확인"))
+                    st.session_state["s2_refresh_output"] = auth_completed.stderr or auth_completed.stdout
             else:
                 st.warning("S2 ID와 PW를 모두 입력하세요.")
         if has_s2_credentials(session_s2_login_values()):
@@ -420,6 +441,13 @@ with st.sidebar:
         st.caption("S2/IPS 접속 정보가 설정되어 있습니다.")
 
     if st.button("S2 기준 전체 교체", disabled=refresh_disabled, use_container_width=True):
+        with st.spinner("S2 로그인 확인 중"):
+            auth_completed = run_s2_auth_check()
+        if auth_completed.returncode != 0:
+            st.session_state["s2_refresh_error"] = s2_refresh_error_message(auth_completed, "로그인 확인")
+            st.session_state["s2_refresh_output"] = auth_completed.stderr or auth_completed.stdout
+            st.rerun()
+
         with st.spinner("S2 기준 전체 교체 중"):
             completed, refresh_scope = run_s2_full_replace()
         if completed.returncode == 0:

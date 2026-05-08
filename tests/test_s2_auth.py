@@ -119,6 +119,25 @@ class S2AuthTest(unittest.TestCase):
         self.assertEqual(fake_session.post_json, {"username": "env-user", "password": "env-password", "cprCd": "1000"})
         self.assertEqual(fake_session.headers["Authorization"], "Bearer header.payload.signature")
 
+    def test_auth_check_only_logs_in_with_short_timeout(self) -> None:
+        fake_session = FakeSession()
+        with patch.dict(
+            os.environ,
+            {
+                "S2_ID": "env-user",
+                "S2_PW": "env-password",
+                "S2_API_BASE_URL": "https://s2-api.example.test",
+            },
+            clear=True,
+        ):
+            with patch.object(refresh_script.requests, "Session", return_value=fake_session):
+                with patch("builtins.print") as fake_print:
+                    refresh_script.check_s2_authentication(login_timeout=7)
+
+        self.assertEqual(fake_session.post_timeout, 7)
+        self.assertTrue(fake_session.closed)
+        fake_print.assert_called_once_with("s2_auth_check=ok")
+
     def test_authenticated_session_reports_login_rejection_as_auth_failure(self) -> None:
         fake_session = FakeSession(response=FakeHttpErrorResponse(401, "bad credentials"))
         with patch.dict(
@@ -154,6 +173,24 @@ class S2AuthTest(unittest.TestCase):
         self.assertEqual(fake_session.post_url, "")
         self.assertEqual(fake_session.headers["Authorization"], "Bearer env-token")
         self.assertEqual(fake_session.headers["X-KISS-API-BASE-URL"], "https://s2-api.example.test")
+
+    def test_authenticated_session_prefers_id_password_over_access_token(self) -> None:
+        fake_session = FakeSession()
+        with patch.dict(
+            os.environ,
+            {
+                "S2_ID": "env-user",
+                "S2_PW": "env-password",
+                "S2_ACCESS_TOKEN": "env-token",
+                "S2_API_BASE_URL": "https://s2-api.example.test",
+            },
+            clear=True,
+        ):
+            with patch.object(refresh_script.requests, "Session", return_value=fake_session):
+                refresh_script.create_authenticated_session()
+
+        self.assertEqual(fake_session.post_url, "https://s2-api.example.test/user/login")
+        self.assertEqual(fake_session.headers["Authorization"], "Bearer header.payload.signature")
 
     def test_access_token_allows_existing_bearer_prefix(self) -> None:
         self.assertEqual(refresh_script.bearer_authorization_value("Bearer existing-token"), "Bearer existing-token")
@@ -197,12 +234,18 @@ class FakeSession:
         self.headers: dict[str, str] = {}
         self.post_url = ""
         self.post_json: dict[str, str] = {}
+        self.post_timeout = 0
+        self.closed = False
         self.response = response or FakeResponse()
 
     def post(self, url: str, *, json: dict[str, str], timeout: int) -> object:
         self.post_url = url
         self.post_json = json
+        self.post_timeout = timeout
         return self.response
+
+    def close(self) -> None:
+        self.closed = True
 
 
 class FakeFetchSession:

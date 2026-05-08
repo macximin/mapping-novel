@@ -53,6 +53,14 @@ class QueryWindow:
 
 def main() -> None:
     args = parse_args()
+    if args.check_auth_only:
+        try:
+            load_env(Path(args.env_file))
+            check_s2_authentication(login_timeout=max(1, args.auth_timeout))
+        except Exception as exc:
+            raise SystemExit(f"S2 인증 확인 실패: {exc}") from None
+        return
+
     started_at = now_iso()
     window: QueryWindow | None = None
     summary_path: Path | None = None
@@ -158,6 +166,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--summary", default="")
     parser.add_argument("--history-db", default=str(ROOT / "data" / "kiss_refresh_history.sqlite"))
     parser.add_argument("--lock-dir", default=str(ROOT / "data" / "s2_refresh.lock"))
+    parser.add_argument("--check-auth-only", action="store_true", help="Only verify S2 authentication and exit.")
+    parser.add_argument("--auth-timeout", type=int, default=10, help="Login timeout seconds for --check-auth-only.")
     return parser.parse_args()
 
 
@@ -190,17 +200,24 @@ def fetch_payment_settlement_rows(
         session.close()
 
 
-def create_authenticated_session() -> requests.Session:
+def check_s2_authentication(*, login_timeout: int = 10) -> None:
+    session = create_authenticated_session(login_timeout=login_timeout)
+    try:
+        print("s2_auth_check=ok")
+    finally:
+        session.close()
+
+
+def create_authenticated_session(*, login_timeout: int = 30) -> requests.Session:
     api_base_url = first_env_value(*S2_API_BASE_URL_KEYS) or KISS_API_BASE_URL
     api_base_url = api_base_url.rstrip("/")
-
-    access_token = first_env_value(*S2_ACCESS_TOKEN_KEYS)
-    if access_token:
-        return create_bearer_session(api_base_url, access_token)
 
     username = first_env_value(*S2_USERNAME_KEYS)
     password = first_env_value(*S2_PASSWORD_KEYS)
     if not username or not password:
+        access_token = first_env_value(*S2_ACCESS_TOKEN_KEYS)
+        if access_token:
+            return create_bearer_session(api_base_url, access_token)
         raise KISSRefreshError(S2_AUTH_ERROR_MESSAGE)
 
     session = requests.Session()
@@ -214,7 +231,7 @@ def create_authenticated_session() -> requests.Session:
     response = session.post(
         f"{api_base_url}/user/login",
         json={"username": username, "password": password, "cprCd": KISS_COMPANY_CODE},
-        timeout=30,
+        timeout=login_timeout,
     )
     if not response.ok:
         raise KISSRefreshError(

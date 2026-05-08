@@ -14,7 +14,7 @@ streamlit run app.py
 Streamlit Cloud의 메인 파일은 `app.py`입니다.
 
 S2 기준 전체 교체는 앱 사이드바에서 S2 ID/PW를 입력한 뒤 실행할 수 있습니다. 입력값은 이번 Streamlit 세션의 메모리에서만 사용하고, repo나 앱 Secrets에는 저장하지 않습니다. 앱은 편의를 위해 S2 ID만 브라우저 localStorage에 기억할 수 있고, S2 PW는 브라우저 비밀번호 관리자의 자동완성을 사용할 수 있습니다.
-입력한 ID/PW는 실제 S2 최신화 실행 때 S2 API 로그인으로 검증되며, 인증이 거부되면 앱에 ID/PW 확인 경고를 표시합니다.
+입력한 ID/PW는 `이번 세션에 사용`을 누를 때 S2 API 로그인으로 먼저 검증됩니다. S2 최신화 실행 전에도 로그인만 빠르게 재확인하며, 인증이 거부되면 앱에 ID/PW 확인 경고를 표시하고 API 다운로드를 시작하지 않습니다.
 
 운영자가 자동 최신화용 공용 접속 정보를 앱에 미리 넣고 싶을 때만 Streamlit Secrets에 아래 값을 넣습니다. 로컬에서는 기존처럼 `.env`를 써도 되고, `.streamlit/secrets.toml`을 써도 됩니다.
 
