@@ -542,11 +542,13 @@ def inject_compact_layout_css() -> None:
         """
         <style>
         .block-container {
-            padding-top: 1.1rem;
+            padding-top: 1.8rem;
             padding-bottom: 1.25rem;
         }
         h1 {
             font-size: 2rem !important;
+            line-height: 1.25 !important;
+            padding-top: 0.1rem !important;
             margin-bottom: 0.15rem !important;
         }
         h2, h3 {
