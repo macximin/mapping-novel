@@ -53,6 +53,7 @@ def main() -> None:
         print(f"s2_change_deleted={result.s2_change_deleted}")
         print(f"s2_change_modified={result.s2_change_modified}")
         print(f"cache={result.output_cache}")
+        print(f"cache_parts={len(result.output_cache_parts)}")
         print(f"s2_lookup={result.output_s2_lookup}")
         print(f"summary={args.summary}")
         print(f"history_db={args.history_db}")

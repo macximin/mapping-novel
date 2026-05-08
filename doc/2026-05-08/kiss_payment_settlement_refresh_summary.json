@@ -72,5 +72,11 @@
       "deleted": 0,
       "modified": 1
     }
-  }
+  },
+  "output_cache_parts": [
+    "C:\\Users\\wjjo\\Desktop\\mapping-novel\\data\\kiss_payment_settlement_cache_part_001.csv",
+    "C:\\Users\\wjjo\\Desktop\\mapping-novel\\data\\kiss_payment_settlement_cache_part_002.csv",
+    "C:\\Users\\wjjo\\Desktop\\mapping-novel\\data\\kiss_payment_settlement_cache_part_003.csv",
+    "C:\\Users\\wjjo\\Desktop\\mapping-novel\\data\\kiss_payment_settlement_cache_part_004.csv"
+  ]
 }

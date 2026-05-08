@@ -82,7 +82,7 @@ python -m py_compile app.py mapping_core.py matching_rules.py
 
 기본 자동감지는 정산서 파일명에 들어 있는 실제 S2 `판매채널명`만 사용합니다. 예를 들어 `카카오`는 통과하지 않고 `카카오페이지(소설)`처럼 S2에서 쓰는 판매채널명을 넣어야 합니다. 파일명을 맞추기 싫으면 앱의 판매채널 드롭다운에서 실제 S2 판매채널명을 직접 선택합니다.
 
-기본 baseline으로 쓰는 `data/kiss_payment_settlement_cache.csv`와 `data/kiss_payment_settlement_s2_lookup.csv`는 repo에 올릴 수 있습니다. 최신화 이력 DB와 실행 잠금 파일은 로컬 운영 파일이며 git에 올리지 않습니다.
+기본 baseline으로 쓰는 `data/kiss_payment_settlement_cache_part_*.csv`와 `data/kiss_payment_settlement_s2_lookup.csv`는 repo에 올릴 수 있습니다. S2 원천 캐시는 GitHub 단일 파일 제한을 피하기 위해 여러 CSV part로 저장하며, 앱과 최신화 스크립트는 part들을 하나의 cache처럼 읽습니다. 최신화 이력 DB와 실행 잠금 파일은 로컬 운영 파일이며 git에 올리지 않습니다.
 
 ## 운영 체크리스트
 

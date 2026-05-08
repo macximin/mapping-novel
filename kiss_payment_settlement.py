@@ -48,6 +48,7 @@ API_RAW_COLUMN_ALIASES = {
 
 S2_AUDIT_COLUMNS = ["콘텐츠명", "S2마스터ID", "콘텐츠ID", "작가정보"]
 AUTHOR_COLUMN_TOKENS = ("작가", "저자", "author", "writer")
+DEFAULT_CACHE_PART_ROWS = 75_000
 
 
 @dataclass(frozen=True)
@@ -61,6 +62,7 @@ class PaymentSettlementImportResult:
     s2_change_modified: int
     s2_change_rows: pd.DataFrame
     output_cache: Path
+    output_cache_parts: tuple[Path, ...]
     output_s2_lookup: Path
     summary: dict[str, Any]
 
@@ -233,6 +235,7 @@ def import_payment_settlement_export(
     cache_path: str | Path,
     s2_lookup_path: str | Path,
     merge_existing: bool = False,
+    cache_part_rows: int = DEFAULT_CACHE_PART_ROWS,
 ) -> PaymentSettlementImportResult:
     incoming = load_payment_settlement_list(source)
     return import_payment_settlement_frame(
@@ -240,6 +243,7 @@ def import_payment_settlement_export(
         cache_path=cache_path,
         s2_lookup_path=s2_lookup_path,
         merge_existing=merge_existing,
+        cache_part_rows=cache_part_rows,
     )
 
 
@@ -249,13 +253,14 @@ def import_payment_settlement_frame(
     cache_path: str | Path,
     s2_lookup_path: str | Path,
     merge_existing: bool = False,
+    cache_part_rows: int = DEFAULT_CACHE_PART_ROWS,
 ) -> PaymentSettlementImportResult:
     cache = Path(cache_path)
     s2_lookup = Path(s2_lookup_path)
     if merge_existing:
         raise ValueError("S2 최신화는 전체 교체만 지원합니다. 기존 로컬 S2 기준에 새 결과를 누적하지 않습니다.")
     incoming = _prepare_payment_settlement_frame(incoming)
-    existing = _prepare_payment_settlement_frame(pd.read_csv(cache, dtype=object)) if cache.exists() else None
+    existing = load_payment_settlement_cache(cache)
     before = 0 if existing is None else len(existing)
     change_rows = build_s2_change_audit(existing, incoming)
     replacement = incoming.reset_index(drop=True)
@@ -263,7 +268,7 @@ def import_payment_settlement_frame(
 
     cache.parent.mkdir(parents=True, exist_ok=True)
     s2_lookup.parent.mkdir(parents=True, exist_ok=True)
-    replacement.to_csv(cache, index=False, encoding="utf-8-sig")
+    cache_outputs = write_payment_settlement_cache(replacement, cache, part_rows=cache_part_rows)
     lookup.to_csv(s2_lookup, index=False, encoding="utf-8-sig")
     summary = summarize_payment_settlement(replacement)
     change_summary = summarize_s2_change_audit(change_rows)
@@ -278,9 +283,57 @@ def import_payment_settlement_frame(
         s2_change_modified=change_summary["modified"],
         s2_change_rows=change_rows,
         output_cache=cache,
+        output_cache_parts=tuple(cache_outputs),
         output_s2_lookup=s2_lookup,
         summary=summary,
     )
+
+
+def cache_part_paths(cache_path: str | Path) -> list[Path]:
+    cache = Path(cache_path)
+    return sorted(cache.parent.glob(f"{cache.stem}_part_*{cache.suffix}"))
+
+
+def load_payment_settlement_cache(cache_path: str | Path) -> pd.DataFrame | None:
+    cache = Path(cache_path)
+    parts = cache_part_paths(cache)
+    if parts:
+        frames = [pd.read_csv(part, dtype=object) for part in parts]
+        return _prepare_payment_settlement_frame(pd.concat(frames, ignore_index=True))
+    if cache.exists():
+        return _prepare_payment_settlement_frame(pd.read_csv(cache, dtype=object))
+    return None
+
+
+def write_payment_settlement_cache(
+    frame: pd.DataFrame,
+    cache_path: str | Path,
+    *,
+    part_rows: int = DEFAULT_CACHE_PART_ROWS,
+) -> list[Path]:
+    cache = Path(cache_path)
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    _remove_payment_settlement_cache_outputs(cache)
+
+    if part_rows <= 0 or len(frame) <= part_rows:
+        frame.to_csv(cache, index=False, encoding="utf-8-sig")
+        return [cache]
+
+    outputs: list[Path] = []
+    for index, start in enumerate(range(0, len(frame), part_rows), start=1):
+        part = cache.with_name(f"{cache.stem}_part_{index:03d}{cache.suffix}")
+        frame.iloc[start : start + part_rows].to_csv(part, index=False, encoding="utf-8-sig")
+        outputs.append(part)
+    return outputs
+
+
+def _remove_payment_settlement_cache_outputs(cache_path: Path) -> None:
+    paths = [cache_path, *cache_part_paths(cache_path)]
+    for path in paths:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def payment_settlement_frame_from_api_rows(rows: list[dict[str, Any]]) -> pd.DataFrame:
@@ -304,6 +357,7 @@ def save_summary(path: str | Path, result: PaymentSettlementImportResult) -> Non
         "s2_change_deleted": result.s2_change_deleted,
         "s2_change_modified": result.s2_change_modified,
         "output_cache": str(result.output_cache),
+        "output_cache_parts": [str(path) for path in result.output_cache_parts],
         "output_s2_lookup": str(result.output_s2_lookup),
         "summary": result.summary,
     }

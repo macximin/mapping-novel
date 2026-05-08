@@ -9,7 +9,9 @@ import pandas as pd
 from openpyxl import Workbook
 
 from kiss_payment_settlement import (
+    cache_part_paths,
     import_payment_settlement_frame,
+    load_payment_settlement_cache,
     load_payment_settlement_list,
     payment_settlement_frame_from_api_rows,
     summarize_payment_settlement,
@@ -165,6 +167,57 @@ class KissPaymentSettlementTest(unittest.TestCase):
             self.assertEqual(lookup["판매채널콘텐츠ID"].tolist(), ["301"])
             self.assertNotIn("사용안함", cache_path.read_text(encoding="utf-8-sig"))
             self.assertNotIn("사용금지", lookup_path.read_text(encoding="utf-8-sig"))
+
+    def test_cache_can_be_written_as_parts_and_read_back_for_refresh_audit(self) -> None:
+        def row(title: str, sales_channel_content_id: str) -> dict[str, object]:
+            return {
+                "승인상태": "승인",
+                "지급정산상태": "운영중",
+                "판매채널명": "테스트 채널",
+                "콘텐츠형태": "소설",
+                "콘텐츠명": title,
+                "작가명": "홍길동",
+                "지급정산마스터 등록 일자": "2026-05-08 11:00:00",
+                "지급정산마스터ID": f"M-{sales_channel_content_id}",
+                "지급정산상세ID": f"D-{sales_channel_content_id}",
+                "콘텐츠ID": f"C-{sales_channel_content_id}",
+                "판매채널콘텐츠ID": sales_channel_content_id,
+            }
+
+        incoming = pd.DataFrame([row("작품 A", "401"), row("작품 B", "402"), row("작품 C", "403")])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_path = Path(tmp) / "s2_cache.csv"
+            lookup_path = Path(tmp) / "s2_lookup.csv"
+
+            first = import_payment_settlement_frame(
+                incoming,
+                cache_path=cache_path,
+                s2_lookup_path=lookup_path,
+                merge_existing=False,
+                cache_part_rows=2,
+            )
+            parts = cache_part_paths(cache_path)
+            cached = load_payment_settlement_cache(cache_path)
+
+            self.assertFalse(cache_path.exists())
+            self.assertEqual([part.name for part in parts], ["s2_cache_part_001.csv", "s2_cache_part_002.csv"])
+            self.assertEqual([part.name for part in first.output_cache_parts], [part.name for part in parts])
+            assert cached is not None
+            self.assertEqual(cached["판매채널콘텐츠ID"].tolist(), ["401", "402", "403"])
+
+            updated = incoming.copy()
+            updated.loc[1, "콘텐츠명"] = "작품 B 개정"
+            second = import_payment_settlement_frame(
+                updated,
+                cache_path=cache_path,
+                s2_lookup_path=lookup_path,
+                merge_existing=False,
+                cache_part_rows=2,
+            )
+
+            self.assertEqual(second.cache_rows_before, 3)
+            self.assertEqual(second.s2_change_modified, 1)
 
     def test_confirmed_master_suffix_variants_are_simplified_in_s2_lookup(self) -> None:
         def row(title: str, sales_channel_content_id: str) -> dict[str, object]:
