@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import io
 import os
 import subprocess
@@ -568,6 +569,15 @@ def inject_compact_layout_css() -> None:
         div[data-testid="stAlert"] {
             padding: 0.5rem 0.75rem;
         }
+        .sidebar-mini-warning {
+            background: #fffbe6;
+            border-radius: 0.45rem;
+            color: #8a5a00;
+            font-size: 0.55rem;
+            line-height: 1.35;
+            margin: 0.2rem 0 0.45rem 0;
+            padding: 0.4rem 0.5rem;
+        }
         div[data-testid="stFileUploader"] {
             min-width: 0;
         }
@@ -654,6 +664,10 @@ def inject_compact_layout_css() -> None:
     )
 
 
+def render_sidebar_mini_warning(message: str) -> None:
+    st.markdown(f'<div class="sidebar-mini-warning">{html.escape(message)}</div>', unsafe_allow_html=True)
+
+
 st.set_page_config(page_title="S2 소설 매핑", layout="wide")
 inject_compact_layout_css()
 st.markdown('<div class="app-title">S2 소설 매핑</div>', unsafe_allow_html=True)
@@ -666,7 +680,7 @@ with st.sidebar:
         f"전체 교체 방식으로 고정합니다. 조회 범위는 "
         f"{S2_REFRESH_START_DATE.isoformat()}부터 오늘까지, 콘텐츠형태는 소설입니다."
     )
-    st.warning("영구저장이 아니라, 서버에 임시 저장됩니다.")
+    render_sidebar_mini_warning("영구저장이 아니라, 서버에 임시 저장됩니다.")
 
     current_cache = cache_metrics(S2_SOURCE_LOOKUP)
     cache_cols = st.columns(2)
@@ -710,7 +724,7 @@ with st.sidebar:
 
     refresh_disabled = not has_s2_credentials(s2_runtime_auth_config())
     if refresh_disabled:
-        st.warning(S2_AUTH_ERROR_MESSAGE)
+        render_sidebar_mini_warning(S2_AUTH_ERROR_MESSAGE)
     else:
         st.caption("S2 접속 정보가 설정되어 있습니다.")
 
