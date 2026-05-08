@@ -757,16 +757,17 @@ else:
     st.caption("자동감지는 엑셀 파일명 기반입니다. 파일명에 플랫폼명이 없으면 플랫폼을 직접 선택하세요.")
 
 
-st.subheader("2. S2 기준")
 s2_source_options = ["수동 S2 파일 업로드"]
 if S2_SOURCE_LOOKUP.exists():
     s2_source_options.insert(0, "로컬 S2 기준 사용")
 s2_file = None
 payment_settlement_file = None
+use_payment_cache = bool(S2_SOURCE_LOOKUP.exists())
+master_df = None
+master_error = ""
 
-if S2_SOURCE_LOOKUP.exists():
-    use_payment_cache = True
-    with st.expander("S2 기준 직접 업로드", expanded=False):
+with st.expander("2. S2 기준 / IPS 보조 검산", expanded=False):
+    if S2_SOURCE_LOOKUP.exists():
         s2_source_mode = st.radio("S2 기준", s2_source_options, horizontal=True)
         use_payment_cache = s2_source_mode == "로컬 S2 기준 사용"
         if not use_payment_cache:
@@ -783,10 +784,11 @@ if S2_SOURCE_LOOKUP.exists():
                     type=["xlsx"],
                     help="이미 판매채널콘텐츠ID, 콘텐츠ID, 콘텐츠명을 포함하도록 정리된 S2 기준 파일입니다.",
                 )
-else:
-    use_payment_cache = False
-    st.warning("로컬 S2 기준이 없습니다. 사이드바에서 S2 최신화를 실행하거나 S2 기준 파일을 업로드하세요.")
-    with st.expander("S2 기준 업로드", expanded=True):
+        else:
+            st.caption("로컬 S2 기준을 사용합니다. 최신 데이터가 필요하면 사이드바에서 S2 기준 전체 교체를 실행하세요.")
+    else:
+        use_payment_cache = False
+        st.warning("로컬 S2 기준이 없습니다. 사이드바에서 S2 최신화를 실행하거나 S2 기준 파일을 업로드하세요.")
         manual_cols = st.columns(2)
         with manual_cols[0]:
             payment_settlement_file = st.file_uploader(
@@ -801,12 +803,10 @@ else:
                 help="이미 판매채널콘텐츠ID, 콘텐츠ID, 콘텐츠명을 포함하도록 정리된 S2 기준 파일입니다.",
             )
 
-
-with st.expander("IPS 보조 검산", expanded=False):
+    st.divider()
+    st.markdown("**IPS 보조 검산**")
     st.caption("선택 검산용입니다. S2 매핑과 S2 전송자료 생성은 S2 기준만 사용합니다.")
     use_ips_aux = st.checkbox("IPS 보조 검산 사용", value=False)
-    master_df = None
-    master_error = ""
     if use_ips_aux and KIDARI_NOVEL_MASTER.exists():
         try:
             master_df = cached_master(str(KIDARI_NOVEL_MASTER))
