@@ -25,7 +25,9 @@ from settlement_adapters import (
 from s2_transfer import build_s2_transfer, export_s2_transfer
 from s2_auth import (
     S2_AUTH_ERROR_MESSAGE,
+    S2_AUTH_FAILURE_HINT,
     has_s2_credentials,
+    looks_like_s2_auth_failure,
     normalize_s2_login_values,
     normalize_s2_secret_values,
     read_env_file,
@@ -200,6 +202,13 @@ def should_retry_s2_with_date_window(completed: subprocess.CompletedProcess[str]
     output = f"{completed.stdout}\n{completed.stderr}".lower()
     non_retry_tokens = [".env", "로그인", "인증", "id/pw", "token", "토큰", "password"]
     return not any(token in output for token in non_retry_tokens)
+
+
+def s2_refresh_error_message(completed: subprocess.CompletedProcess[str], refresh_scope: str) -> str:
+    output = f"{completed.stdout}\n{completed.stderr}"
+    if looks_like_s2_auth_failure(output):
+        return f"{S2_AUTH_FAILURE_HINT} API 다운로드를 진행하지 못했습니다. ({refresh_scope})"
+    return f"S2 기준 전체 교체 실패: {refresh_scope}"
 
 
 def ui_safe_refresh_log(raw_text: str) -> str:
@@ -418,7 +427,7 @@ with st.sidebar:
             st.session_state["s2_refresh_output"] = completed.stdout
             st.rerun()
         else:
-            st.session_state["s2_refresh_error"] = f"S2 기준 전체 교체 실패: {refresh_scope}"
+            st.session_state["s2_refresh_error"] = s2_refresh_error_message(completed, refresh_scope)
             st.session_state["s2_refresh_output"] = completed.stderr or completed.stdout
             st.rerun()
 

@@ -217,11 +217,14 @@ def create_authenticated_session() -> requests.Session:
         timeout=30,
     )
     if not response.ok:
-        raise KISSRefreshError(f"S2 로그인 실패: HTTP {response.status_code} {response.text[:300]}")
+        raise KISSRefreshError(
+            f"S2 로그인 실패: ID/PW가 틀렸거나 S2 API가 인증을 거부했습니다. "
+            f"HTTP {response.status_code} {response.text[:300]}"
+        )
     response.encoding = "utf-8"
     token = extract_jwt(response.json())
     if not token:
-        raise KISSRefreshError("S2 로그인 응답에서 인증 토큰을 찾지 못했습니다.")
+        raise KISSRefreshError("S2 로그인 실패: S2 로그인 응답에서 인증 토큰을 찾지 못했습니다.")
     session.headers["Authorization"] = f"Bearer {token}"
     session.headers["X-KISS-API-BASE-URL"] = api_base_url
     return session
@@ -277,6 +280,11 @@ def fetch_page(
         params=build_query_params(window, page_num=page_num, page_size=page_size),
         timeout=120,
     )
+    if response.status_code in {401, 403}:
+        raise KISSRefreshError(
+            f"S2 인증 실패: access token 또는 로그인 세션이 거부되었습니다. "
+            f"HTTP {response.status_code} {response.text[:300]}"
+        )
     if not response.ok:
         raise KISSRefreshError(f"정산 목록 조회 실패: HTTP {response.status_code} {response.text[:300]}")
     response.encoding = "utf-8"

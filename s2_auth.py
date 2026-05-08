@@ -19,6 +19,21 @@ S2_AUTH_ERROR_MESSAGE = (
     "S2/IPS 접속 정보가 없습니다. 앱 사이드바에 S2 ID/PW를 입력하거나 "
     "로컬 .env, 환경변수, 또는 Streamlit Secrets에 ID/PW 또는 access token을 설정하세요."
 )
+S2_AUTH_FAILURE_HINT = (
+    "S2 로그인 실패: S2 ID/PW가 틀렸거나 S2 API가 인증을 거부했습니다. "
+    "입력값을 확인하세요."
+)
+S2_AUTH_FAILURE_TOKENS = (
+    "s2 로그인 실패",
+    "s2 인증 실패",
+    "인증 토큰을 찾지 못했습니다",
+    "http 401",
+    "http 403",
+    "unauthorized",
+    "forbidden",
+    "invalid credentials",
+    "invalid token",
+)
 
 
 def read_env_file(path: str | Path) -> dict[str, str]:
@@ -64,6 +79,11 @@ def has_s2_credentials(config: dict[str, Any]) -> bool:
     if first_config_value(config, S2_ACCESS_TOKEN_KEYS):
         return True
     return bool(first_config_value(config, S2_USERNAME_KEYS) and first_config_value(config, S2_PASSWORD_KEYS))
+
+
+def looks_like_s2_auth_failure(raw_text: object) -> bool:
+    normalized = str(raw_text or "").lower()
+    return any(token in normalized for token in S2_AUTH_FAILURE_TOKENS)
 
 
 def normalize_s2_login_values(username: object, password: object) -> dict[str, str]:
