@@ -5,7 +5,6 @@ import unittest
 import pandas as pd
 
 from mapping_core import (
-    MATCH_AMBIGUOUS,
     MATCH_NONE,
     MATCH_OK,
     build_mapping,
@@ -98,7 +97,7 @@ class MappingCoreTest(unittest.TestCase):
 
         self.assertEqual(filtered["콘텐츠명"].tolist(), ["정상 작품"])
 
-    def test_ambiguous_master_key_blocks_auto_id_selection(self) -> None:
+    def test_duplicate_master_key_auto_selects_first_candidate(self) -> None:
         s2 = pd.DataFrame({"콘텐츠명": ["그 남자의 비밀"], "판매채널콘텐츠ID": ["S2-1"]})
         settlement = pd.DataFrame({"작품명": ["그 남자의 비밀"], "금액": [1000]})
         master = pd.DataFrame(
@@ -114,10 +113,34 @@ class MappingCoreTest(unittest.TestCase):
         mapping = build_mapping(s2, settlement, master)
         rows = mapping.rows
 
-        self.assertEqual(rows.loc[0, "IPS_매칭상태"], MATCH_AMBIGUOUS)
-        self.assertEqual(rows.loc[0, "IPS_콘텐츠ID"], "")
-        self.assertEqual(rows.loc[0, "검토필요(Y/N)"], "Y")
+        self.assertEqual(rows.loc[0, "IPS_매칭상태"], MATCH_OK)
+        self.assertEqual(rows.loc[0, "IPS_콘텐츠ID"], "CID-1")
+        self.assertEqual(rows.loc[0, "IPS_후보수"], "2")
+        self.assertEqual(rows.loc[0, "IPS_후보ID목록"], "CID-1 | CID-2")
+        self.assertEqual(rows.loc[0, "검토필요(Y/N)"], "N")
         self.assertEqual(len(mapping.duplicate_candidates), 1)
+
+    def test_duplicate_s2_key_auto_selects_latest_registration_date(self) -> None:
+        s2 = pd.DataFrame(
+            {
+                "콘텐츠명": ["그 남자의 비밀", "그 남자의 비밀"],
+                "판매채널콘텐츠ID": ["S2-old", "S2-new"],
+                "콘텐츠ID": ["CID-old", "CID-new"],
+                "지급정산마스터_등록일자": ["2025-01-01T00:00:00", "2026-01-01T00:00:00"],
+            }
+        )
+        settlement = pd.DataFrame({"작품명": ["그 남자의 비밀"], "금액": [1000]})
+
+        mapping = build_mapping(s2, settlement, None)
+        rows = mapping.rows
+        duplicate = mapping.duplicate_candidates.iloc[0]
+
+        self.assertEqual(rows.loc[0, "S2_매칭상태"], MATCH_OK)
+        self.assertEqual(rows.loc[0, "S2_판매채널콘텐츠ID"], "S2-new")
+        self.assertEqual(rows.loc[0, "S2_콘텐츠ID"], "CID-new")
+        self.assertEqual(rows.loc[0, "S2_후보ID목록"], "S2-new | S2-old")
+        self.assertEqual(duplicate["자동선택기준"], "지급정산마스터_등록일자 최신순")
+        self.assertEqual(duplicate["자동선택기준값"], "2026-01-01T00:00:00")
 
 
 if __name__ == "__main__":

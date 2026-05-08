@@ -42,6 +42,17 @@ SETTLEMENT_TITLE_COL_CAND = [
 ]
 MASTER_TITLE_COL_CAND = ["콘텐츠명", "콘텐츠 제목", "Title", "ContentName", "제목"]
 MASTER_ID_COL_CAND = ["콘텐츠ID", "판매채널콘텐츠ID", "ID", "ContentID"]
+AUTO_SELECT_DATE_COL_CAND = [
+    "지급정산마스터_등록일자",
+    "지급정산마스터 등록 일자",
+    "cretDtm",
+    "코드생성일",
+    "코드생성일자",
+    "등록일자",
+    "등록일",
+    "생성일자",
+    "생성일",
+]
 
 MATCH_OK = "matched"
 MATCH_NONE = "no_match"
@@ -120,15 +131,21 @@ def _candidate_index(
     working[title_col] = working[title_col].map(text)
 
     for key, group in working[working[key_col].map(bool)].groupby(key_col, dropna=False):
+        group, auto_select_date_col = _sort_candidates_for_auto_selection(group)
         ids = [value for value in dict.fromkeys(group[id_col].map(text)) if value]
         titles = [value for value in dict.fromkeys(group[title_col].map(text)) if value]
-        status = MATCH_OK if len(ids) == 1 else MATCH_AMBIGUOUS
+        selected_date = text(group.iloc[0][auto_select_date_col]) if auto_select_date_col and not group.empty else ""
+        status = MATCH_OK if ids else MATCH_NONE
         row = {
             "source": source,
             "정제키": key,
             "매칭상태": status,
             "후보행수": len(group),
             "후보ID수": len(ids),
+            "자동선택ID": ids[0] if ids else "",
+            "자동선택콘텐츠명": titles[0] if titles else "",
+            "자동선택기준": f"{auto_select_date_col} 최신순" if auto_select_date_col else "입력순",
+            "자동선택기준값": selected_date,
             "후보ID목록": " | ".join(ids[:30]),
             "후보콘텐츠명목록": " | ".join(titles[:30]),
         }
@@ -140,6 +157,23 @@ def _candidate_index(
 
     candidates = pd.DataFrame(rows)
     return candidates, lookup
+
+
+def _sort_candidates_for_auto_selection(group: pd.DataFrame) -> tuple[pd.DataFrame, str]:
+    for column in AUTO_SELECT_DATE_COL_CAND:
+        if column not in group.columns:
+            continue
+        parsed = pd.to_datetime(group[column], errors="coerce")
+        if not parsed.notna().any():
+            continue
+        ordered = group.assign(_자동선택일자=parsed, _자동선택일자있음=parsed.notna())
+        ordered = ordered.sort_values(
+            by=["_자동선택일자있음", "_자동선택일자"],
+            ascending=[False, False],
+            kind="stable",
+        )
+        return ordered.drop(columns=["_자동선택일자", "_자동선택일자있음"]), column
+    return group, ""
 
 
 def _status_for(key: str, index: dict[str, dict[str, str]]) -> str:
@@ -159,15 +193,13 @@ def _value_for(key: str, index: dict[str, dict[str, str]], field: str) -> str:
 def _single_id_for(key: str, index: dict[str, dict[str, str]]) -> str:
     if _status_for(key, index) != MATCH_OK:
         return ""
-    ids = _value_for(key, index, "후보ID목록").split(" | ")
-    return text(ids[0]) if ids else ""
+    return _value_for(key, index, "자동선택ID")
 
 
 def _single_title_for(key: str, index: dict[str, dict[str, str]]) -> str:
     if _status_for(key, index) != MATCH_OK:
         return ""
-    titles = _value_for(key, index, "후보콘텐츠명목록").split(" | ")
-    return text(titles[0]) if titles else ""
+    return _value_for(key, index, "자동선택콘텐츠명")
 
 
 def _single_extra_for(key: str, index: dict[str, dict[str, str]], field: str) -> str:
@@ -175,6 +207,16 @@ def _single_extra_for(key: str, index: dict[str, dict[str, str]], field: str) ->
         return ""
     values = _value_for(key, index, field).split(" | ")
     return text(values[0]) if values else ""
+
+
+def _duplicate_candidate_mask(candidates: pd.DataFrame) -> pd.Series:
+    if "후보ID수" not in candidates.columns:
+        return pd.Series(False, index=candidates.index)
+    return pd.to_numeric(candidates["후보ID수"], errors="coerce").fillna(0).gt(1)
+
+
+def _duplicate_candidate_count(candidates: pd.DataFrame) -> int:
+    return int(_duplicate_candidate_mask(candidates).sum())
 
 
 def _review_reason(row: pd.Series) -> str:
@@ -281,13 +323,18 @@ def build_mapping(
         prefixed.columns = [f"정산서원본_{col}" for col in prefixed.columns]
         result = pd.concat([result, prefixed], axis=1)
 
+    settlement_keys = {key for key in result["정제_상품명"].map(text) if key}
     duplicate_candidates = pd.concat(
         [
-            s2_candidates[s2_candidates["매칭상태"].eq(MATCH_AMBIGUOUS)],
-            master_candidates[master_candidates["매칭상태"].eq(MATCH_AMBIGUOUS)],
+            s2_candidates[_duplicate_candidate_mask(s2_candidates)],
+            master_candidates[_duplicate_candidate_mask(master_candidates)],
         ],
         ignore_index=True,
     )
+    if "정제키" in duplicate_candidates.columns:
+        duplicate_candidates = duplicate_candidates[
+            duplicate_candidates["정제키"].map(text).isin(settlement_keys)
+        ].reset_index(drop=True)
     review_rows = result[result["검토필요(Y/N)"].eq("Y")].copy()
     input_validation = _build_input_validation(
         s2,
@@ -329,7 +376,7 @@ def _build_input_validation(
         ("S2 콘텐츠명 컬럼", s2_title_col),
         ("S2 ID 컬럼", s2_id_col),
         ("S2 빈 정제키 행 수", int(s2["_정제키"].eq("").sum())),
-        ("S2 중복 후보 정제키 수", int(s2_candidates["매칭상태"].eq(MATCH_AMBIGUOUS).sum())),
+        ("S2 중복 후보 정제키 수", _duplicate_candidate_count(s2_candidates)),
         ("정산서 행 수", len(settlement)),
         ("정산서 상품명 컬럼", settlement_title_col),
         ("정산서 빈 정제키 행 수", int(settlement["_정제키"].eq("").sum())),
@@ -341,7 +388,7 @@ def _build_input_validation(
                 ("IPS 콘텐츠명 컬럼", master_title_col),
                 ("IPS ID 컬럼", master_id_col),
                 ("IPS 빈 정제키 행 수", int(master["_정제키"].eq("").sum())),
-                ("IPS 중복 후보 정제키 수", int(master_candidates["매칭상태"].eq(MATCH_AMBIGUOUS).sum())),
+                ("IPS 중복 후보 정제키 수", _duplicate_candidate_count(master_candidates)),
             ]
         )
     else:
