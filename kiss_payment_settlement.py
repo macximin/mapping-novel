@@ -11,7 +11,7 @@ from xml.etree import ElementTree as ET
 
 import pandas as pd
 
-from mapping_core import drop_disabled_rows, extract_master_work_title, text
+from cleaning_rules import drop_disabled_rows, extract_master_work_title, text
 
 
 OOXML_NS = {

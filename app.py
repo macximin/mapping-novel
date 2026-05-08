@@ -15,7 +15,8 @@ import streamlit as st
 
 from kiss_refresh_history import latest_refresh_runs, latest_s2_refresh_changes
 from kiss_payment_settlement import load_payment_settlement_list, summarize_payment_settlement, to_s2_lookup
-from mapping_core import build_mapping, drop_disabled_rows, export_mapping, load_master, read_first_sheet, text
+from cleaning_rules import drop_disabled_rows, text
+from mapping_core import build_mapping, export_mapping, load_master, read_first_sheet
 from settlement_adapters import (
     adapter_audit_dataframe,
     adapter_blocking_messages,

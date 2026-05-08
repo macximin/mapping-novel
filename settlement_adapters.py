@@ -12,7 +12,7 @@ import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
-from mapping_core import clean_title, text
+from cleaning_rules import clean_title, text
 
 
 STANDARD_TITLE_COLUMN = "상품명"

@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 import io
-import re
-import unicodedata
 from dataclasses import dataclass
-from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Iterable
 
 import pandas as pd
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
+
+from cleaning_rules import clean_master_title, clean_title, drop_disabled_rows, extract_master_work_title, text
 
 
 S2_TITLE_COL_CAND = ["콘텐츠명", "콘텐츠 제목", "Title", "ContentName", "제목"]
@@ -44,19 +43,11 @@ SETTLEMENT_TITLE_COL_CAND = [
 MASTER_TITLE_COL_CAND = ["콘텐츠명", "콘텐츠 제목", "Title", "ContentName", "제목"]
 MASTER_ID_COL_CAND = ["콘텐츠ID", "판매채널콘텐츠ID", "ID", "ContentID"]
 
-ANGLE_TITLE_PATTERNS = (
-    re.compile(r"<([^<>]+)>"),
-    re.compile(r"＜([^＜＞]+)＞"),
-    re.compile(r"〈([^〈〉]+)〉"),
-    re.compile(r"《([^《》]+)》"),
-)
-
 MATCH_OK = "matched"
 MATCH_NONE = "no_match"
 MATCH_AMBIGUOUS = "ambiguous"
 MATCH_BLANK = "blank_key"
 MATCH_SKIPPED = "skipped"
-DISABLED_ROW_MARKERS = ("[사용안함]", "(사용안함)", "[사용금지]", "(사용금지)")
 
 
 @dataclass
@@ -66,123 +57,6 @@ class MappingResult:
     review_rows: pd.DataFrame
     duplicate_candidates: pd.DataFrame
     input_validation: pd.DataFrame
-
-
-def text(value: Any) -> str:
-    if value is None:
-        return ""
-    try:
-        if pd.isna(value):
-            return ""
-    except (TypeError, ValueError):
-        pass
-    return str(value).strip()
-
-
-def has_disabled_row_marker(value: Any) -> bool:
-    normalized = unicodedata.normalize("NFKC", text(value))
-    return any(marker in normalized for marker in DISABLED_ROW_MARKERS)
-
-
-def disabled_row_mask(frame: pd.DataFrame, columns: Iterable[Any] | None = None) -> pd.Series:
-    if columns is None:
-        selected_columns = list(frame.columns)
-    else:
-        selected_columns = [column for column in columns if column in frame.columns]
-    mask = pd.Series(False, index=frame.index)
-    for column in selected_columns:
-        mask = mask | frame[column].map(has_disabled_row_marker)
-    return mask
-
-
-def drop_disabled_rows(frame: pd.DataFrame, columns: Iterable[Any] | None = None) -> pd.DataFrame:
-    if frame.empty:
-        return frame.copy().reset_index(drop=True)
-    return frame.loc[~disabled_row_mask(frame, columns=columns)].reset_index(drop=True)
-
-
-def clean_title(txt: Any) -> str:
-    t = str(txt).strip()
-
-    t = re.sub(r"\s*~[^~]+~\s*$", "", t)
-    t = re.sub(r"\s+\d+부(?:\s*-\s*.*)?$", "", t)
-
-    exceptions = ["24/7", "실명마제", "라마대제"]
-    for ex in exceptions:
-        if ex in t:
-            return ex.lower()
-
-    if isinstance(txt, (datetime, date)):
-        return f"{txt.month}월{txt.day}일".lower()
-
-    if re.fullmatch(r"\d{1,2}월\d{1,2}일", t):
-        return t.lower()
-
-    t = re.sub(r"\s*\d+/\d+$", "", t).lower()
-    t = re.sub(r"\s*제\s*\d+[권화]", "", t)
-    for k, v in {"Un-holyNight": "UnholyNight", "?": "", "~": "", ",": "", "-": "", "_": ""}.items():
-        t = t.replace(k, v)
-
-    t = re.sub(r"\([^)]*\)|\[[^\]]*\]", "", t)
-    t = re.sub(r"【[^】]*】", "", t)
-
-    for pat in ["세트구매", "난세의 서 편", "초혼의 사자 편", "전설의 부활 편"]:
-        t = re.sub(pat, "", t)
-
-    t = unicodedata.normalize("NFKC", t)
-    t = re.sub(r"\d+[권화부회]", "", t)
-
-    for kw in [
-        "개정판 l",
-        "개정판",
-        "외전",
-        "무삭제본",
-        "무삭제판",
-        "합본",
-        "단행본",
-        "시즌",
-        "세트",
-        "연재",
-        "특별",
-        "최종화",
-        "완결",
-        "2부",
-        "무삭제",
-        "완전판",
-        "세개정판",
-        "19세개정판",
-    ]:
-        t = t.replace(kw, "")
-
-    t = re.sub(r"\d+", "", t).rstrip(".")
-    t = re.sub(r"[\.\~\-–—!@#$%^&*_=+\\|/:;\"''`<>?，｡､{}()]", "", t)
-    t = t.replace("[", "").replace("]", "")
-    t = re.sub(r"특별$", "", t)
-    t = "".join(t.split())
-    return t.strip().lower()
-
-
-def extract_master_work_title(value: Any) -> str:
-    raw = unicodedata.normalize("NFKC", text(value))
-    if not raw:
-        return ""
-
-    for pattern in ANGLE_TITLE_PATTERNS:
-        match = pattern.search(raw)
-        if match and text(match.group(1)):
-            return text(match.group(1))
-
-    parts = [part.strip() for part in raw.split("_") if part.strip()]
-    if len(parts) >= 5 and clean_title(parts[-1]) == clean_title("확정"):
-        candidate = "_".join(parts[:-4]).strip()
-        if candidate:
-            return candidate
-
-    return raw
-
-
-def clean_master_title(value: Any) -> str:
-    return clean_title(extract_master_work_title(value))
 
 
 def pick_column(candidates: Iterable[str], df: pd.DataFrame, label: str) -> str:

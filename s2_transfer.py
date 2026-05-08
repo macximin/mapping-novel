@@ -8,7 +8,8 @@ import pandas as pd
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-from mapping_core import MATCH_OK, text
+from cleaning_rules import text
+from mapping_core import MATCH_OK
 
 
 S2_TRANSFER_COLUMNS = ["판매채널콘텐츠ID", "판매금액", "정산기준액", "상계금액"]
