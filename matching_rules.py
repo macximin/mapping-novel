@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import re
+import unicodedata
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
@@ -16,6 +20,12 @@ class S2ChannelRule:
     include_tokens: tuple[str, ...] = ()
     exclude_tokens: tuple[str, ...] = ()
     label: str = ""
+
+
+@dataclass(frozen=True)
+class S2SalesChannelDetection:
+    sales_channel: str
+    platform: str
 
 
 @dataclass(frozen=True)
@@ -46,6 +56,68 @@ class S2ChannelFilterResult:
 
 
 class S2ChannelPolicy:
+    def filter_by_sales_channel(
+        self,
+        frame: pd.DataFrame,
+        *,
+        sales_channel: str,
+        source_name: str = "",
+    ) -> S2ChannelFilterResult:
+        before_rows = len(frame)
+        normalized_channel = text(sales_channel)
+        normalized_source = text(source_name)
+        if frame.empty:
+            return S2ChannelFilterResult(
+                frame=frame.copy(),
+                platform="",
+                source_name=normalized_source,
+                before_rows=0,
+                after_rows=0,
+                matched_channels=(),
+                rule_label=normalized_channel,
+                active=False,
+                reason="S2 기준이 비어 있어 판매채널 필터를 건너뜁니다.",
+            )
+        if S2_CHANNEL_COLUMN not in frame.columns:
+            return S2ChannelFilterResult(
+                frame=frame.copy(),
+                platform="",
+                source_name=normalized_source,
+                before_rows=before_rows,
+                after_rows=before_rows,
+                matched_channels=(),
+                rule_label=normalized_channel,
+                active=False,
+                reason="S2 기준에 판매채널명 컬럼이 없어 판매채널 필터를 건너뜁니다.",
+            )
+        if not normalized_channel:
+            return S2ChannelFilterResult(
+                frame=frame.copy(),
+                platform="",
+                source_name=normalized_source,
+                before_rows=before_rows,
+                after_rows=before_rows,
+                matched_channels=(),
+                rule_label="",
+                active=False,
+                reason="파일명에서 S2 판매채널명을 찾지 못해 판매채널 필터를 건너뜁니다.",
+            )
+
+        channels = frame[S2_CHANNEL_COLUMN].map(text)
+        mask = channels.eq(normalized_channel)
+        filtered = frame.loc[mask].reset_index(drop=True)
+        matched_channels = tuple(sorted(channels[mask].drop_duplicates().tolist()))
+        return S2ChannelFilterResult(
+            frame=filtered,
+            platform=platform_for_s2_sales_channel(normalized_channel) or "",
+            source_name=normalized_source,
+            before_rows=before_rows,
+            after_rows=len(filtered),
+            matched_channels=matched_channels,
+            rule_label=normalized_channel,
+            active=True,
+        )
+
     def filter(self, frame: pd.DataFrame, *, platform: str, source_name: str = "") -> S2ChannelFilterResult:
         before_rows = len(frame)
         normalized_platform = text(platform)
@@ -182,12 +254,78 @@ PLATFORM_EXACT_CHANNELS: dict[str, tuple[str, ...]] = {
     "한아름": ("한아름(P000003716)",),
 }
 
+SPECIAL_EXACT_CHANNELS: dict[str, tuple[str, ...]] = {
+    "네이버": (
+        "네이버_장르(광고수익)",
+        "네이버_연재(광고수익)",
+        "네이버_장르",
+        "네이버_연재",
+        "네이버_일반",
+    ),
+    "문피아": ("문피아(후원금 정산)",),
+    "리디북스": ("리디북스(이벤트)",),
+    "카카오": ("카카오페이지(선투자)", "카카오페이지(창작지원금)", "카카오페이지(소설)"),
+}
+
+
+def _filename_text(source_name: Any) -> str:
+    raw = text(source_name).replace("\\", "/")
+    return raw.rsplit("/", 1)[-1] if "/" in raw else Path(raw).name
+
+
+def _channel_key(value: Any) -> str:
+    normalized = unicodedata.normalize("NFKC", text(value)).lower()
+    return re.sub(r"[\s_\-–—/\\:;.,()[\]{}<>〈〉《》'\"`|+]+", "", normalized)
+
+
+def s2_sales_channel_to_platform() -> dict[str, str]:
+    result: dict[str, str] = {}
+    for platform, channels in PLATFORM_EXACT_CHANNELS.items():
+        for channel in channels:
+            result[channel] = platform
+    for platform, channels in SPECIAL_EXACT_CHANNELS.items():
+        for channel in channels:
+            result[channel] = platform
+    return result
+
+
+def platform_for_s2_sales_channel(sales_channel: str) -> str | None:
+    return s2_sales_channel_to_platform().get(text(sales_channel))
+
+
+def detect_s2_sales_channel(source_name: Any) -> S2SalesChannelDetection | None:
+    haystack = _channel_key(_filename_text(source_name))
+    if not haystack:
+        return None
+    matches: list[tuple[int, str, str]] = []
+    for channel, platform in s2_sales_channel_to_platform().items():
+        key = _channel_key(channel)
+        if key and key in haystack:
+            matches.append((len(key), channel, platform))
+    if not matches:
+        return None
+    _, channel, platform = sorted(matches, reverse=True)[0]
+    return S2SalesChannelDetection(sales_channel=channel, platform=platform)
+
 
 DEFAULT_S2_CHANNEL_POLICY = S2ChannelPolicy()
 
 
 def filter_s2_by_platform(frame: pd.DataFrame, *, platform: str, source_name: str = "") -> S2ChannelFilterResult:
     return DEFAULT_S2_CHANNEL_POLICY.filter(frame, platform=platform, source_name=source_name)
+
+
+def filter_s2_by_sales_channel(
+    frame: pd.DataFrame,
+    *,
+    sales_channel: str,
+    source_name: str = "",
+) -> S2ChannelFilterResult:
+    return DEFAULT_S2_CHANNEL_POLICY.filter_by_sales_channel(
+        frame,
+        sales_channel=sales_channel,
+        source_name=source_name,
+    )
 
 
 def s2_filter_validation_rows(result: S2ChannelFilterResult) -> pd.DataFrame:

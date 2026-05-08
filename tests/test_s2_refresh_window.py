@@ -29,7 +29,7 @@ class S2RefreshWindowTest(unittest.TestCase):
         self.assertEqual(window.start_date, "1900-01-01")
         self.assertEqual(window.end_date, "2026-05-07")
 
-    def test_query_params_use_date_range_and_novel_content_shape(self) -> None:
+    def test_query_params_use_date_range_without_content_shape_filter_by_default(self) -> None:
         window = resolve_query_window(
             "full-replace",
             today=date(2026, 5, 7),
@@ -41,6 +41,18 @@ class S2RefreshWindowTest(unittest.TestCase):
 
         self.assertEqual(params["searchBgnDt"], "1900-01-01")
         self.assertEqual(params["searchEndDt"], "2026-05-07")
+        self.assertEqual(params["ctnsStleCd"], "")
+
+    def test_query_params_can_use_explicit_content_shape_filter(self) -> None:
+        window = resolve_query_window(
+            "full-replace",
+            today=date(2026, 5, 7),
+            start_date="",
+            end_date="",
+        )
+
+        params = build_query_params(window, page_num=1, page_size=1000, content_style_code="102")
+
         self.assertEqual(params["ctnsStleCd"], "102")
 
     def test_custom_window_only_allows_full_replace_range(self) -> None:

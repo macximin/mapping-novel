@@ -4,7 +4,7 @@ import unittest
 
 import pandas as pd
 
-from matching_rules import filter_s2_by_platform
+from matching_rules import detect_s2_sales_channel, filter_s2_by_platform, filter_s2_by_sales_channel
 
 
 class MatchingRulesTest(unittest.TestCase):
@@ -56,6 +56,43 @@ class MatchingRulesTest(unittest.TestCase):
         self.assertFalse(result.active)
         self.assertEqual(result.after_rows, 1)
         self.assertIn("판매채널명", result.reason)
+
+    def test_detects_real_s2_sales_channel_from_filename(self) -> None:
+        detection = detect_s2_sales_channel("2026년 2월 카카오페이지(소설) 정산상세.xlsx")
+
+        self.assertIsNotNone(detection)
+        assert detection is not None
+        self.assertEqual(detection.sales_channel, "카카오페이지(소설)")
+        self.assertEqual(detection.platform, "카카오")
+
+    def test_rejects_broad_platform_name_without_s2_sales_channel(self) -> None:
+        self.assertIsNone(detect_s2_sales_channel("2026년 2월 카카오 정산상세.xlsx"))
+
+    def test_detects_longest_sales_channel_name_first(self) -> None:
+        detection = detect_s2_sales_channel("2026년 2월 네이버_장르(광고수익) 정산상세.xlsx")
+
+        self.assertIsNotNone(detection)
+        assert detection is not None
+        self.assertEqual(detection.sales_channel, "네이버_장르(광고수익)")
+
+    def test_filters_s2_rows_by_exact_sales_channel(self) -> None:
+        s2 = pd.DataFrame(
+            {
+                "콘텐츠명": ["같은 작품", "같은 작품", "다른 작품"],
+                "판매채널콘텐츠ID": ["K-NOVEL", "K-SHORT", "G-1"],
+                "판매채널명": ["카카오페이지(소설)", "카카오페이지(숏툰)", "구글(소설)"],
+            }
+        )
+
+        result = filter_s2_by_sales_channel(
+            s2,
+            sales_channel="카카오페이지(소설)",
+            source_name="2026년 2월 카카오페이지(소설) 정산상세.xlsx",
+        )
+
+        self.assertTrue(result.active)
+        self.assertEqual(result.frame["판매채널콘텐츠ID"].tolist(), ["K-NOVEL"])
+        self.assertEqual(result.matched_channels, ("카카오페이지(소설)",))
 
 
 if __name__ == "__main__":

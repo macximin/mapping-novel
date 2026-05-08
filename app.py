@@ -17,13 +17,17 @@ from kiss_refresh_history import latest_refresh_runs, latest_s2_refresh_changes
 from kiss_payment_settlement import load_payment_settlement_list, summarize_payment_settlement, to_s2_lookup
 from cleaning_rules import drop_disabled_rows, text
 from mapping_core import build_mapping, export_mapping, load_master, read_first_sheet
-from matching_rules import filter_s2_by_platform, s2_filter_validation_rows
+from matching_rules import (
+    detect_s2_sales_channel,
+    filter_s2_by_sales_channel,
+    platform_for_s2_sales_channel,
+    s2_filter_validation_rows,
+    s2_sales_channel_to_platform,
+)
 from settlement_adapters import (
     adapter_audit_dataframe,
     adapter_blocking_messages,
     adapter_warning_messages,
-    detect_platform,
-    list_platforms,
     normalize_settlement,
     summarize_normalization,
 )
@@ -388,10 +392,16 @@ def default_mapping_stem(uploaded_file: object) -> str:
     return sanitize_output_stem(f"{Path(name).stem}_매핑") or f"mapping_result_{datetime.now().strftime('%Y%m%d_%H%M')}"
 
 
-def effective_platform_for_file(uploaded_file: object, selected_platform: str) -> str:
-    if selected_platform == AUTO_PLATFORM_OPTION:
-        return detect_platform(text(getattr(uploaded_file, "name", ""))) or ""
-    return selected_platform
+def s2_channel_for_file(uploaded_file: object, selected_s2_channel: str) -> str:
+    if selected_s2_channel != AUTO_PLATFORM_OPTION:
+        return selected_s2_channel
+    detection = detect_s2_sales_channel(text(getattr(uploaded_file, "name", "")))
+    return detection.sales_channel if detection else ""
+
+
+def effective_platform_for_file(uploaded_file: object, selected_s2_channel: str) -> str:
+    s2_channel = s2_channel_for_file(uploaded_file, selected_s2_channel)
+    return platform_for_s2_sales_channel(s2_channel) or ""
 
 
 def load_selected_s2_basis(
@@ -412,17 +422,19 @@ def load_selected_s2_basis(
 def process_settlement_batch_item(
     *,
     settlement_file: object,
-    selected_platform: str,
+    selected_s2_channel: str,
     s2_df: pd.DataFrame,
     master_df: pd.DataFrame | None,
     output_stem: str,
 ) -> dict[str, Any]:
     source_name = text(getattr(settlement_file, "name", "uploaded.xlsx"))
-    effective_platform = effective_platform_for_file(settlement_file, selected_platform)
+    s2_channel = s2_channel_for_file(settlement_file, selected_s2_channel)
+    effective_platform = effective_platform_for_file(settlement_file, selected_s2_channel)
     result: dict[str, Any] = {
         "source_name": source_name,
         "output_stem": output_stem,
         "platform": effective_platform,
+        "s2_sales_channel": s2_channel,
         "status": "failed",
         "error": "",
         "blocking_messages": [],
@@ -433,11 +445,18 @@ def process_settlement_batch_item(
     }
 
     try:
+        if not s2_channel or not effective_platform:
+            result["status"] = "blocked"
+            result["error"] = (
+                "파일명에서 S2 판매채널명을 찾지 못했습니다. "
+                "파일명에 실제 S2 판매채널명을 넣거나 드롭다운에서 직접 선택하세요. 예: 카카오페이지(소설)"
+            )
+            return result
         if hasattr(settlement_file, "seek"):
             settlement_file.seek(0)
         adapter_result = normalize_settlement(
             settlement_file,
-            platform=None if selected_platform == AUTO_PLATFORM_OPTION else selected_platform,
+            platform=effective_platform,
             source_name=source_name,
         )
         adapter_summary = summarize_normalization(adapter_result)
@@ -461,7 +480,7 @@ def process_settlement_batch_item(
             return result
 
         settlement_df = adapter_result.to_mapping_feed()
-        s2_channel_filter = filter_s2_by_platform(s2_df, platform=effective_platform, source_name=source_name)
+        s2_channel_filter = filter_s2_by_sales_channel(s2_df, sales_channel=s2_channel, source_name=source_name)
         result["s2_channel_filter"] = s2_channel_filter
         if s2_channel_filter.active and s2_channel_filter.after_rows == 0:
             warning_messages.append(s2_channel_filter.message())
@@ -510,6 +529,7 @@ def batch_summary_frame(results: list[dict[str, Any]]) -> pd.DataFrame:
             {
                 "파일": result.get("source_name", ""),
                 "상태": result.get("status", ""),
+                "S2 판매채널": result.get("s2_sales_channel", ""),
                 "플랫폼": result.get("platform", ""),
                 "원본 파싱 행": adapter_summary.get("parsed_rows", ""),
                 "S2 매핑 입력 행": adapter_summary.get("default_feed_rows", ""),
@@ -702,7 +722,7 @@ with st.sidebar:
     sync_browser_s2_id_memory()
     st.caption(
         f"전체 교체 방식으로 고정합니다. 조회 범위는 "
-        f"{S2_REFRESH_START_DATE.isoformat()}부터 오늘까지, 콘텐츠형태는 소설입니다."
+        f"{S2_REFRESH_START_DATE.isoformat()}부터 오늘까지이며, 콘텐츠형태 제한은 두지 않습니다."
     )
     render_sidebar_mini_warning("영구저장이 아니라, 서버에 임시 저장됩니다.")
 
@@ -793,48 +813,54 @@ with st.sidebar:
                 st.dataframe(change_detail, use_container_width=True, height=260)
 
 
-st.caption("정산서 업로드 -> 플랫폼 감지 -> S2 매핑 -> 다운로드")
+st.caption("정산서 업로드 -> S2 판매채널명 확인 -> S2 매핑 -> 다운로드")
 
 st.subheader("1. 플랫폼별 정산서 업로드")
 upload_cols = st.columns([2, 1])
 with upload_cols[0]:
     settlement_files = st.file_uploader("플랫폼별 정산서 엑셀 (여러 개 가능)", type=["xlsx"], accept_multiple_files=True)
 with upload_cols[1]:
-    platform_options = [AUTO_PLATFORM_OPTION] + list_platforms()
-    selected_platform = st.selectbox(
-        "플랫폼",
-        platform_options,
-        help="자동감지는 엑셀 파일명에 들어 있는 플랫폼명 또는 별칭만 사용합니다.",
+    s2_channel_options = [AUTO_PLATFORM_OPTION] + sorted(s2_sales_channel_to_platform())
+    selected_s2_channel = st.selectbox(
+        "판매채널",
+        s2_channel_options,
+        help="기본은 파일명에서 실제 S2 판매채널명을 감지합니다. 싫으면 여기서 판매채널명을 직접 선택하세요.",
     )
 
 settlement_files = list(settlement_files or [])
 platform_rows = []
 undetected_files = []
 for uploaded_file in settlement_files:
-    detected_platform = detect_platform(uploaded_file.name)
-    effective_platform = effective_platform_for_file(uploaded_file, selected_platform)
-    if selected_platform == AUTO_PLATFORM_OPTION and not effective_platform:
+    filename_detection = detect_s2_sales_channel(uploaded_file.name)
+    detected_channel = s2_channel_for_file(uploaded_file, selected_s2_channel)
+    effective_platform = effective_platform_for_file(uploaded_file, selected_s2_channel)
+    if not detected_channel or not effective_platform:
         undetected_files.append(uploaded_file.name)
     platform_rows.append(
         {
             "파일": uploaded_file.name,
-            "감지 플랫폼": detected_platform or "",
-            "처리 플랫폼": effective_platform or "직접 선택 필요",
+            "파일명 감지": filename_detection.sales_channel if filename_detection else "",
+            "처리 S2 판매채널": detected_channel or "",
+            "처리 어댑터": effective_platform or "파일명 수정 필요",
         }
     )
 
 if settlement_files:
-    if selected_platform == AUTO_PLATFORM_OPTION:
-        if not undetected_files:
-            st.success(f"엑셀 파일명 기반 자동감지 완료: {len(settlement_files):,}개")
-        else:
-            st.warning(f"플랫폼을 감지하지 못한 파일 {len(undetected_files):,}개가 있습니다. 플랫폼을 직접 선택하세요.")
+    if selected_s2_channel != AUTO_PLATFORM_OPTION:
+        st.info(f"직접 선택한 S2 판매채널로 처리합니다: {selected_s2_channel}")
+        if len(settlement_files) > 1:
+            st.warning("직접 선택은 업로드한 모든 파일에 같은 S2 판매채널을 적용합니다. 채널이 서로 다르면 하나씩 처리하세요.")
+    elif not undetected_files:
+        st.success(f"파일명 기반 S2 판매채널 확인 완료: {len(settlement_files):,}개")
     else:
-        st.info(f"직접 선택한 플랫폼으로 모든 파일을 처리합니다: {selected_platform}")
-    with st.expander("파일별 플랫폼", expanded=bool(undetected_files)):
+        st.warning(
+            f"S2 판매채널명을 감지하지 못한 파일 {len(undetected_files):,}개가 있습니다. "
+            "파일명에 실제 S2 판매채널명을 넣거나 드롭다운에서 직접 선택하세요. 예: 카카오페이지(소설)"
+        )
+    with st.expander("파일별 판매채널", expanded=bool(undetected_files)):
         st.dataframe(pd.DataFrame(platform_rows), use_container_width=True, height=min(180, 40 + 28 * len(platform_rows)))
 else:
-    st.caption("자동감지는 엑셀 파일명 기반입니다. 파일명에 플랫폼명이 없으면 플랫폼을 직접 선택하세요.")
+    st.caption("파일명에 실제 S2 판매채널명을 넣거나, 드롭다운에서 직접 선택하세요. 예: 카카오페이지(소설), 구글(소설), 네이버_장르")
 
 
 s2_source_options = ["수동 S2 파일 업로드"]
@@ -916,7 +942,7 @@ elif len(settlement_files) > 1:
     st.caption("복수 처리 결과는 파일별 `{원본파일명}_매핑.xlsx`로 만들고 ZIP으로 묶습니다.")
 
 has_s2_source = s2_file is not None or payment_settlement_file is not None or use_payment_cache
-all_platforms_ready = selected_platform != AUTO_PLATFORM_OPTION or not undetected_files
+all_platforms_ready = selected_s2_channel != AUTO_PLATFORM_OPTION or not undetected_files
 can_run = bool(settlement_files) and has_s2_source and all_platforms_ready
 if not can_run:
     missing: list[str] = []
@@ -925,7 +951,7 @@ if not can_run:
     if not has_s2_source:
         missing.append("S2 기준")
     if settlement_files and not all_platforms_ready:
-        missing.append("플랫폼 직접 선택")
+        missing.append("파일명 내 S2 판매채널명")
     st.warning(" / ".join(missing) + "이 필요합니다.")
 
 run_clicked = st.button("어댑터 정규화 및 S2 매핑 실행", type="primary", disabled=not can_run)
@@ -952,7 +978,7 @@ try:
             results.append(
                 process_settlement_batch_item(
                     settlement_file=settlement_file,
-                    selected_platform=selected_platform,
+                    selected_s2_channel=selected_s2_channel,
                     s2_df=s2_df,
                     master_df=master_df,
                     output_stem=output_stem,

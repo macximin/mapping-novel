@@ -35,7 +35,7 @@ from s2_auth import (
 DEFAULT_PAGE_SIZE = 1000
 KISS_API_BASE_URL = "https://kiss-api.kld.kr"
 KISS_COMPANY_CODE = "1000"
-NOVEL_CONTENT_STYLE_CODE = "102"  # S2 콘텐츠형태=소설
+DEFAULT_CONTENT_STYLE_CODE = ""  # blank means no S2 content-shape filter
 JWT_PATTERN = re.compile(r"^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$")
 FULL_REPLACE_START_DATE = date(1900, 1, 1)
 
@@ -75,6 +75,7 @@ def main() -> None:
                 window=window,
                 page_size=args.page_size,
                 limit_pages=max(0, args.limit_pages),
+                content_style_code=args.content_style_code,
             )
             frame = payment_settlement_frame_from_api_rows(rows)
             result = import_payment_settlement_frame(
@@ -116,6 +117,7 @@ def main() -> None:
         print(f"mode={window.mode}")
         print(f"search_start_date={window.start_date or '<blank>'}")
         print(f"search_end_date={window.end_date or '<blank>'}")
+        print(f"content_style_code={args.content_style_code or '<blank>'}")
         print(f"api_total_rows={total_rows}")
         print(f"fetched_rows={len(rows)}")
         print(f"fetched_pages={fetched_pages}")
@@ -161,6 +163,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--env-file", default=str(ROOT / ".env"))
     parser.add_argument("--page-size", type=int, default=DEFAULT_PAGE_SIZE)
     parser.add_argument("--limit-pages", type=int, default=0, help="0 means fetch all pages.")
+    parser.add_argument("--content-style-code", default=DEFAULT_CONTENT_STYLE_CODE, help="S2 ctnsStleCd. Blank fetches every content shape.")
     parser.add_argument("--cache", default=str(ROOT / "data" / "kiss_payment_settlement_cache.csv"))
     parser.add_argument("--s2-lookup", default=str(ROOT / "data" / "kiss_payment_settlement_s2_lookup.csv"))
     parser.add_argument("--summary", default="")
@@ -180,6 +183,7 @@ def fetch_payment_settlement_rows(
     window: QueryWindow,
     page_size: int,
     limit_pages: int,
+    content_style_code: str = DEFAULT_CONTENT_STYLE_CODE,
 ) -> tuple[list[dict[str, Any]], int, int]:
     session = create_authenticated_session()
     try:
@@ -188,7 +192,13 @@ def fetch_payment_settlement_rows(
         total_rows = 0
         fetched_pages = 0
         while True:
-            total_rows, page_rows = fetch_page(session, window=window, page_num=page_num, page_size=page_size)
+            total_rows, page_rows = fetch_page(
+                session,
+                window=window,
+                page_num=page_num,
+                page_size=page_size,
+                content_style_code=content_style_code,
+            )
             rows.extend(page_rows)
             fetched_pages += 1
             print(f"[page {page_num}] fetched={len(page_rows)} total_accumulated={len(rows)} / total={total_rows}")
@@ -290,11 +300,12 @@ def fetch_page(
     window: QueryWindow,
     page_num: int,
     page_size: int,
+    content_style_code: str = DEFAULT_CONTENT_STYLE_CODE,
 ) -> tuple[int, list[dict[str, Any]]]:
     api_base_url = session.headers["X-KISS-API-BASE-URL"]
     response = session.get(
         f"{api_base_url}/mst/setl/pymt-setl",
-        params=build_query_params(window, page_num=page_num, page_size=page_size),
+        params=build_query_params(window, page_num=page_num, page_size=page_size, content_style_code=content_style_code),
         timeout=120,
     )
     if response.status_code in {401, 403}:
@@ -315,14 +326,20 @@ def fetch_page(
     return int(total), rows
 
 
-def build_query_params(window: QueryWindow, *, page_num: int, page_size: int) -> dict[str, Any]:
+def build_query_params(
+    window: QueryWindow,
+    *,
+    page_num: int,
+    page_size: int,
+    content_style_code: str = DEFAULT_CONTENT_STYLE_CODE,
+) -> dict[str, Any]:
     return {
         "searchBgnDt": window.start_date,
         "searchEndDt": window.end_date,
         "ctnsNm": "",
         "cnfmStsCd": "",
         "pymtSetlStsCd": "",
-        "ctnsStleCd": NOVEL_CONTENT_STYLE_CODE,
+        "ctnsStleCd": content_style_code,
         "schnSeCd": "",
         "uperSchnCd": "",
         "schnId": "",
