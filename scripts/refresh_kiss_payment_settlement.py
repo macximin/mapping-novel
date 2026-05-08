@@ -35,9 +35,9 @@ from s2_auth import (
 DEFAULT_PAGE_SIZE = 1000
 KISS_API_BASE_URL = "https://kiss-api.kld.kr"
 KISS_COMPANY_CODE = "1000"
-NOVEL_CONTENT_STYLE_CODE = "102"
+NOVEL_CONTENT_STYLE_CODE = "102"  # S2 콘텐츠형태=소설
 JWT_PATTERN = re.compile(r"^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$")
-FULL_REPLACE_FALLBACK_START_DATE = date(1900, 1, 1)
+FULL_REPLACE_START_DATE = date(1900, 1, 1)
 
 
 class KISSRefreshError(RuntimeError):
@@ -155,8 +155,8 @@ def main() -> None:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Refresh local S2 lookup cache from S2 API.")
     parser.add_argument("--mode", choices=("full-replace", "initial", "custom"), default="full-replace")
-    parser.add_argument("--start-date", default="", help="YYYY-MM-DD. Only used for S2 full-replace fallback.")
-    parser.add_argument("--end-date", default="", help="YYYY-MM-DD. Only used for S2 full-replace fallback.")
+    parser.add_argument("--start-date", default="", help="YYYY-MM-DD. Only used for guarded custom S2 full-replace.")
+    parser.add_argument("--end-date", default="", help="YYYY-MM-DD. Only used for guarded custom S2 full-replace.")
     parser.add_argument("--today", default="", help="Override today's date in YYYY-MM-DD for tests.")
     parser.add_argument("--env-file", default=str(ROOT / ".env"))
     parser.add_argument("--page-size", type=int, default=DEFAULT_PAGE_SIZE)
@@ -337,7 +337,7 @@ def build_query_params(window: QueryWindow, *, page_num: int, page_size: int) ->
 
 def resolve_query_window(mode: str, *, today: date, start_date: str, end_date: str) -> QueryWindow:
     if mode in {"full-replace", "initial"}:
-        return QueryWindow(mode=mode, start_date="", end_date="")
+        return QueryWindow(mode=mode, start_date=FULL_REPLACE_START_DATE.isoformat(), end_date=today.isoformat())
     if mode == "rolling-3m":
         raise KISSRefreshError("S2 최신화는 전체 교체만 지원합니다. rolling-3m 조회는 사용할 수 없습니다.")
     if not start_date.strip() or not end_date.strip():
@@ -346,10 +346,10 @@ def resolve_query_window(mode: str, *, today: date, start_date: str, end_date: s
     end = date.fromisoformat(end_date)
     if start > end:
         raise KISSRefreshError("start-date 가 end-date 보다 늦을 수 없습니다.")
-    if start != FULL_REPLACE_FALLBACK_START_DATE or end != today:
+    if start != FULL_REPLACE_START_DATE or end != today:
         raise KISSRefreshError(
-            f"S2 최신화는 전체 교체만 지원합니다. 기간 보완 조회는 "
-            f"{FULL_REPLACE_FALLBACK_START_DATE.isoformat()}부터 {today.isoformat()}까지만 허용합니다."
+            f"S2 최신화는 전체 교체만 지원합니다. 조회 범위는 "
+            f"{FULL_REPLACE_START_DATE.isoformat()}부터 {today.isoformat()}까지만 허용합니다."
         )
     return QueryWindow(mode=mode, start_date=start.isoformat(), end_date=end.isoformat())
 

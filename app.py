@@ -41,7 +41,7 @@ S2_SOURCE_LOOKUP = DATA_DIR / "kiss_payment_settlement_s2_lookup.csv"
 S2_HISTORY_DB = DATA_DIR / "kiss_refresh_history.sqlite"
 S2_REFRESH_SCRIPT = ROOT / "scripts" / "refresh_kiss_payment_settlement.py"
 S2_ENV_FILE = ROOT / ".env"
-S2_FALLBACK_START_DATE = date(1900, 1, 1)
+S2_REFRESH_START_DATE = date(1900, 1, 1)
 AUTO_PLATFORM_OPTION = "엑셀 파일명으로 자동감지"
 S2_SESSION_USERNAME_KEY = "s2_session_username"
 S2_SESSION_PASSWORD_KEY = "s2_session_password"
@@ -203,18 +203,7 @@ def run_s2_auth_check() -> subprocess.CompletedProcess[str]:
 
 def run_s2_full_replace() -> tuple[subprocess.CompletedProcess[str], str]:
     completed = run_s2_refresh("full-replace")
-    if completed.returncode == 0 or not should_retry_s2_with_date_window(completed):
-        return completed, "무기간 조회"
-
-    today = date.today()
-    fallback = run_s2_refresh("custom", S2_FALLBACK_START_DATE, today)
-    return fallback, f"{S2_FALLBACK_START_DATE.isoformat()} ~ {today.isoformat()}"
-
-
-def should_retry_s2_with_date_window(completed: subprocess.CompletedProcess[str]) -> bool:
-    output = f"{completed.stdout}\n{completed.stderr}".lower()
-    non_retry_tokens = [".env", "로그인", "인증", "id/pw", "token", "토큰", "password"]
-    return not any(token in output for token in non_retry_tokens)
+    return completed, f"{S2_REFRESH_START_DATE.isoformat()} ~ {date.today().isoformat()}"
 
 
 def s2_refresh_error_message(completed: subprocess.CompletedProcess[str], refresh_scope: str) -> str:
@@ -307,7 +296,7 @@ def history_frame(limit: int = 10) -> pd.DataFrame:
             {
                 "full-replace": "전체 교체",
                 "initial": "전체 교체",
-                "custom": "기간 보완 전체 교체",
+                "custom": "지정 범위 전체 교체",
                 "rolling-3m": "과거 기록(부분 조회)",
             }
         ).fillna(frame["조회범위"])
@@ -382,16 +371,16 @@ def render_error_detail(exc: Exception) -> None:
         st.exception(exc)
 
 
-st.set_page_config(page_title="S2/IPS 소설 매핑", layout="wide")
-st.title("S2/IPS 소설 매핑")
-st.caption("플랫폼별 정산서 엑셀을 S2 기준에 매핑하고, IPS는 보조 검산으로 확인합니다.")
+st.set_page_config(page_title="S2 소설 매핑", layout="wide")
+st.title("S2 소설 매핑")
+st.caption("플랫폼별 정산서 엑셀을 S2 기준에 매핑합니다.")
 
 with st.sidebar:
     st.subheader("S2 최신화")
     sync_browser_s2_id_memory()
     st.caption(
-        f"전체 교체 방식으로 고정합니다. 먼저 기간 없이 조회하고, S2가 기간을 요구하면 "
-        f"{S2_FALLBACK_START_DATE.isoformat()}부터 오늘까지로 다시 조회합니다."
+        f"전체 교체 방식으로 고정합니다. 조회 범위는 "
+        f"{S2_REFRESH_START_DATE.isoformat()}부터 오늘까지, 콘텐츠형태는 소설입니다."
     )
 
     current_cache = cache_metrics(S2_SOURCE_LOOKUP)
@@ -438,7 +427,7 @@ with st.sidebar:
     if refresh_disabled:
         st.warning(S2_AUTH_ERROR_MESSAGE)
     else:
-        st.caption("S2/IPS 접속 정보가 설정되어 있습니다.")
+        st.caption("S2 접속 정보가 설정되어 있습니다.")
 
     if st.button("S2 기준 전체 교체", disabled=refresh_disabled, use_container_width=True):
         with st.spinner("S2 로그인 확인 중"):
@@ -508,55 +497,75 @@ else:
     st.caption("자동감지는 엑셀 파일명 기반입니다. 파일명에 플랫폼명이 없으면 플랫폼을 직접 선택하세요.")
 
 
-st.subheader("2. S2 기준 선택")
+st.subheader("2. S2 기준")
 s2_source_options = ["수동 S2 파일 업로드"]
 if S2_SOURCE_LOOKUP.exists():
     s2_source_options.insert(0, "로컬 S2 기준 사용")
-s2_source_mode = st.radio("S2 기준", s2_source_options, horizontal=True)
-use_payment_cache = s2_source_mode == "로컬 S2 기준 사용"
 s2_file = None
 payment_settlement_file = None
 
-if use_payment_cache:
-    st.caption("로컬에 저장된 S2 기준을 사용합니다. 최신 데이터가 필요하면 왼쪽에서 전체 교체를 실행하세요.")
+if S2_SOURCE_LOOKUP.exists():
+    use_payment_cache = True
+    with st.expander("S2 기준 직접 업로드", expanded=False):
+        s2_source_mode = st.radio("S2 기준", s2_source_options, horizontal=True)
+        use_payment_cache = s2_source_mode == "로컬 S2 기준 사용"
+        if not use_payment_cache:
+            manual_cols = st.columns(2)
+            with manual_cols[0]:
+                payment_settlement_file = st.file_uploader(
+                    "S2 원천 엑셀",
+                    type=["xlsx"],
+                    help="S2에서 받은 원천 엑셀을 앱이 매핑 기준 컬럼으로 변환합니다.",
+                )
+            with manual_cols[1]:
+                s2_file = st.file_uploader(
+                    "S2 기준 리스트",
+                    type=["xlsx"],
+                    help="이미 판매채널콘텐츠ID, 콘텐츠ID, 콘텐츠명을 포함하도록 정리된 S2 기준 파일입니다.",
+                )
 else:
-    manual_cols = st.columns(2)
-    with manual_cols[0]:
-        payment_settlement_file = st.file_uploader(
-            "S2 원천 엑셀",
-            type=["xlsx"],
-            help="S2에서 받은 원천 엑셀을 앱이 매핑 기준 컬럼으로 변환합니다.",
-        )
-    with manual_cols[1]:
-        s2_file = st.file_uploader(
-            "S2 기준 리스트",
-            type=["xlsx"],
-            help="이미 판매채널콘텐츠ID, 콘텐츠ID, 콘텐츠명을 포함하도록 정리된 S2 기준 파일입니다.",
-        )
+    use_payment_cache = False
+    st.warning("로컬 S2 기준이 없습니다. 사이드바에서 S2 최신화를 실행하거나 S2 기준 파일을 업로드하세요.")
+    with st.expander("S2 기준 업로드", expanded=True):
+        manual_cols = st.columns(2)
+        with manual_cols[0]:
+            payment_settlement_file = st.file_uploader(
+                "S2 원천 엑셀",
+                type=["xlsx"],
+                help="S2에서 받은 원천 엑셀을 앱이 매핑 기준 컬럼으로 변환합니다.",
+            )
+        with manual_cols[1]:
+            s2_file = st.file_uploader(
+                "S2 기준 리스트",
+                type=["xlsx"],
+                help="이미 판매채널콘텐츠ID, 콘텐츠ID, 콘텐츠명을 포함하도록 정리된 S2 기준 파일입니다.",
+            )
 
 
-master_df = None
-master_error = ""
-if KIDARI_NOVEL_MASTER.exists():
-    try:
-        master_df = cached_master(str(KIDARI_NOVEL_MASTER))
-    except Exception as exc:
-        master_error = str(exc)
-
-meta_cols = st.columns(4)
-if master_df is not None:
-    st.info("S2 기준으로 매핑합니다. IPS 기준 파일은 보조 검산으로만 사용합니다.")
-    meta_cols[0].metric("IPS 보조 파일", KIDARI_NOVEL_MASTER.name)
-    meta_cols[1].metric("IPS 보조 행 수", f"{len(master_df):,}")
-elif master_error:
-    st.warning(f"IPS 보조 검산은 건너뜁니다. IPS 기준 파일을 읽지 못했습니다: {master_error}")
-else:
-    st.info("S2 기준으로 매핑합니다. IPS 보조 검산 파일은 없습니다.")
-    meta_cols[0].metric("IPS 보조 검산", "skipped")
-if master_df is not None and "귀속법인" in master_df.columns:
-    meta_cols[2].metric("귀속법인", " | ".join(master_df["귀속법인"].dropna().astype(str).unique()[:3]))
-if master_df is not None and "콘텐츠형태" in master_df.columns:
-    meta_cols[3].metric("콘텐츠형태", " | ".join(master_df["콘텐츠형태"].dropna().astype(str).unique()[:3]))
+with st.expander("IPS 보조 검산", expanded=False):
+    st.caption("선택 검산용입니다. S2 매핑과 S2 전송자료 생성은 S2 기준만 사용합니다.")
+    use_ips_aux = st.checkbox("IPS 보조 검산 사용", value=False)
+    master_df = None
+    master_error = ""
+    if use_ips_aux and KIDARI_NOVEL_MASTER.exists():
+        try:
+            master_df = cached_master(str(KIDARI_NOVEL_MASTER))
+        except Exception as exc:
+            master_error = str(exc)
+    meta_cols = st.columns(4)
+    if master_df is not None:
+        meta_cols[0].metric("IPS 보조 파일", KIDARI_NOVEL_MASTER.name)
+        meta_cols[1].metric("IPS 보조 행 수", f"{len(master_df):,}")
+    elif master_error:
+        st.warning(f"IPS 기준 파일을 읽지 못했습니다: {master_error}")
+    elif use_ips_aux:
+        meta_cols[0].metric("IPS 보조 검산", "file missing")
+    else:
+        meta_cols[0].metric("IPS 보조 검산", "skipped")
+    if master_df is not None and "귀속법인" in master_df.columns:
+        meta_cols[2].metric("귀속법인", " | ".join(master_df["귀속법인"].dropna().astype(str).unique()[:3]))
+    if master_df is not None and "콘텐츠형태" in master_df.columns:
+        meta_cols[3].metric("콘텐츠형태", " | ".join(master_df["콘텐츠형태"].dropna().astype(str).unique()[:3]))
 
 
 st.subheader("3. 정규화 및 S2 매핑")
