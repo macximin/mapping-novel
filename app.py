@@ -17,6 +17,7 @@ from kiss_refresh_history import latest_refresh_runs, latest_s2_refresh_changes
 from kiss_payment_settlement import load_payment_settlement_list, summarize_payment_settlement, to_s2_lookup
 from cleaning_rules import drop_disabled_rows, text
 from mapping_core import build_mapping, export_mapping, load_master, read_first_sheet
+from matching_rules import filter_s2_by_platform, s2_filter_validation_rows
 from settlement_adapters import (
     adapter_audit_dataframe,
     adapter_blocking_messages,
@@ -426,6 +427,7 @@ def process_settlement_batch_item(
         "error": "",
         "blocking_messages": [],
         "warning_messages": [],
+        "info_messages": [],
         "mapping_bytes": b"",
         "transfer_bytes": b"",
     }
@@ -442,6 +444,7 @@ def process_settlement_batch_item(
         audit_df = adapter_audit_dataframe(adapter_result)
         blocking_messages = adapter_blocking_messages(adapter_result)
         warning_messages = adapter_warning_messages(adapter_result)
+        info_messages: list[str] = []
         result.update(
             {
                 "adapter_result": adapter_result,
@@ -449,6 +452,7 @@ def process_settlement_batch_item(
                 "audit_df": audit_df,
                 "blocking_messages": blocking_messages,
                 "warning_messages": warning_messages,
+                "info_messages": info_messages,
             }
         )
         if blocking_messages:
@@ -457,8 +461,22 @@ def process_settlement_batch_item(
             return result
 
         settlement_df = adapter_result.to_mapping_feed()
-        mapping = build_mapping(s2_df, settlement_df, master_df)
+        s2_channel_filter = filter_s2_by_platform(s2_df, platform=effective_platform, source_name=source_name)
+        result["s2_channel_filter"] = s2_channel_filter
+        if s2_channel_filter.active and s2_channel_filter.after_rows == 0:
+            warning_messages.append(s2_channel_filter.message())
+        elif s2_channel_filter.active:
+            info_messages.append(s2_channel_filter.message())
+        elif s2_channel_filter.reason:
+            warning_messages.append(s2_channel_filter.reason)
+        mapping = build_mapping(s2_channel_filter.frame, settlement_df, master_df)
+        filter_validation = s2_filter_validation_rows(s2_channel_filter)
+        if not filter_validation.empty:
+            mapping.input_validation = pd.concat([filter_validation, mapping.input_validation], ignore_index=True)
         summary = dict(zip(mapping.summary["항목"], mapping.summary["값"]))
+        if s2_channel_filter.active:
+            summary["S2 필터 전 행 수"] = s2_channel_filter.before_rows
+            summary["S2 필터 후 행 수"] = s2_channel_filter.after_rows
         s2_transfer = build_s2_transfer(
             mapping.rows,
             amount_policy_locked=adapter_result.spec.s2_amount_policy_locked,
@@ -496,6 +514,11 @@ def batch_summary_frame(results: list[dict[str, Any]]) -> pd.DataFrame:
                 "원본 파싱 행": adapter_summary.get("parsed_rows", ""),
                 "S2 매핑 입력 행": adapter_summary.get("default_feed_rows", ""),
                 "S2 matched": mapping_summary.get("S2 matched", ""),
+                "S2 필터": (
+                    f"{mapping_summary.get('S2 필터 전 행 수'):,} -> {mapping_summary.get('S2 필터 후 행 수'):,}"
+                    if mapping_summary.get("S2 필터 전 행 수") not in (None, "")
+                    else ""
+                ),
                 "검토필요": mapping_summary.get("검토필요 행 수", ""),
                 "S2 전송자료": transfer_exportable,
                 "메시지": result.get("error", ""),
@@ -992,6 +1015,8 @@ for idx, result in enumerate(results, start=1):
             st.error(message)
         for message in result.get("warning_messages", []):
             st.warning(message)
+        for message in result.get("info_messages", []):
+            st.info(message)
 
         audit_df = result.get("audit_df")
         if audit_df is not None:
