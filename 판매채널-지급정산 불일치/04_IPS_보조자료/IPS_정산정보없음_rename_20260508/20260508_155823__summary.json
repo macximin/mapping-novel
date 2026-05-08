@@ -1,0 +1,14 @@
+{
+  "generated_at": "2026-05-08T15:58:23",
+  "source_review": "C:\\Users\\wjjo\\Desktop\\mapping-novel\\판매채널-지급정산 불일치\\04_IPS_보조자료\\IPS_정산정보없음_대조_20260508\\정산정보없음_IPS_rename검토_콘텐츠단위.csv",
+  "safe_seed_plan": "C:\\Users\\wjjo\\Desktop\\mapping-novel\\판매채널-지급정산 불일치\\04_IPS_보조자료\\IPS_정산정보없음_rename_20260508\\20260508_155823__정산정보없음_safe_seed_plan.csv",
+  "siaane_seed_plan": "C:\\Users\\wjjo\\Desktop\\업무자동화_ssot\\SIAANE_v2\\담당컨텐츠_분류\\latest__정산정보없음_update_ips_rename_apply.csv",
+  "risky_manual_review": "C:\\Users\\wjjo\\Desktop\\mapping-novel\\판매채널-지급정산 불일치\\04_IPS_보조자료\\IPS_정산정보없음_rename_20260508\\20260508_155823__정산정보없음_rename_위험_수동검토.csv",
+  "source_rows": 1195,
+  "safe_rows": 1068,
+  "risky_rows": 127,
+  "plan_rows": 1068,
+  "plan_changed_rows": 1068,
+  "already_marked_rows": 0,
+  "combined_marker_rows": 0
+}

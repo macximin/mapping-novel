@@ -1,0 +1,22 @@
+{
+  "generated_at": "2026-05-08T16:11:37",
+  "content_id": "107869",
+  "title": "(카카오) 언어의 주인이란",
+  "all_sales_channel_content_rows": 4,
+  "no_settlement_rows": 1,
+  "ok_settlement_rows": 3,
+  "no_settlement_sales_channel_content_ids": [
+    "857741"
+  ],
+  "ok_sales_channel_content_ids": [
+    "804328",
+    "165316",
+    "165317"
+  ],
+  "decision": "IPS 콘텐츠명 전체 rename 금지. 판매채널콘텐츠ID 단위로만 차단해야 함.",
+  "outputs": {
+    "all": "C:\\Users\\wjjo\\Desktop\\mapping-novel\\판매채널-지급정산 불일치\\05_불일치_판정\\20260508\\단건검토_107869_언어의주인이란\\107869_채널별_지급정산관리_대조.csv",
+    "problem_only": "C:\\Users\\wjjo\\Desktop\\mapping-novel\\판매채널-지급정산 불일치\\05_불일치_판정\\20260508\\단건검토_107869_언어의주인이란\\107869_정산정보없음_채널만.csv",
+    "ok_only": "C:\\Users\\wjjo\\Desktop\\mapping-novel\\판매채널-지급정산 불일치\\05_불일치_판정\\20260508\\단건검토_107869_언어의주인이란\\107869_정상정산_채널.csv"
+  }
+}

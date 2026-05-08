@@ -144,6 +144,8 @@ class KissPaymentSettlementTest(unittest.TestCase):
                 row("[사용금지]_삭제 작품", "304"),
                 row("(사용금지)_삭제 작품", "305"),
                 row("작가 칸 표식 작품", "306", "(사용금지)"),
+                row("[사용안함]_[정산정보없음]_이중 차단 작품", "307"),
+                row("작가 칸 이중 표식 작품", "308", "[사용안함]_[정산정보없음]"),
             ]
         )
 
@@ -167,6 +169,7 @@ class KissPaymentSettlementTest(unittest.TestCase):
             self.assertEqual(lookup["판매채널콘텐츠ID"].tolist(), ["301"])
             self.assertNotIn("사용안함", cache_path.read_text(encoding="utf-8-sig"))
             self.assertNotIn("사용금지", lookup_path.read_text(encoding="utf-8-sig"))
+            self.assertNotIn("정산정보없음", cache_path.read_text(encoding="utf-8-sig"))
 
     def test_cache_can_be_written_as_parts_and_read_back_for_refresh_audit(self) -> None:
         def row(title: str, sales_channel_content_id: str) -> dict[str, object]:

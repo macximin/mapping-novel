@@ -1,0 +1,22 @@
+{
+  "created_at": "20260508",
+  "target_channels": 51,
+  "target_platforms": 36,
+  "service_rows": 98113,
+  "grade_counts": {
+    "OK_지급정산관리존재": 93403,
+    "B_잠재오염_정산정보없음": 2281,
+    "C_사용안함_사용금지_선차단": 2154,
+    "A_정산서등장_정산정보없음": 275
+  },
+  "failed_service_fetches": 0,
+  "settlement_sample_files": 51,
+  "failed_settlement_sample_parses": 0,
+  "service_dir": "C:\\Users\\wjjo\\Desktop\\mapping-novel\\판매채널-지급정산 불일치\\03_S2_판매채널콘텐츠_증거\\플랫폼별_추출결과\\20260508",
+  "judgement_dir": "C:\\Users\\wjjo\\Desktop\\mapping-novel\\판매채널-지급정산 불일치\\05_불일치_판정\\20260508",
+  "filename_detection_rows": 38,
+  "filename_detection_note": "D급은 판매채널콘텐츠 행이 아니라 정산서 파일명 단위 판정입니다.",
+  "known_limit_notes": [
+    "원스토어(소설) 판매채널콘텐츠 API 응답이 정확히 9,999행이라 서버 응답 상한 가능성이 있습니다."
+  ]
+}

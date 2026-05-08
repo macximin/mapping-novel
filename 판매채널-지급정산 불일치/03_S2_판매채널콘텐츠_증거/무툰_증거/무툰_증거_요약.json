@@ -1,0 +1,19 @@
+{
+  "source_file": "C:\\Users\\wjjo\\Desktop\\mapping-novel\\ignore\\2026-02-initial-settlement-details\\무툰\\2026년 2월 무툰(소설 서비스) 정산상세.xlsx",
+  "sales_channel": "무툰(소설 서비스)",
+  "schnId": 63,
+  "bcncCd": "7168100915",
+  "channel_content_rows": 3079,
+  "payment_settlement_channel_rows": 2943,
+  "settlement_rows": 514,
+  "s2_no_match_rows": 32,
+  "diagnosis_counts": {
+    "정산정보없음_차단_후보": 12,
+    "판매채널콘텐츠_없음_또는_명칭차이": 10,
+    "IPS_마스터_확인필요": 10
+  },
+  "outputs": {
+    "csv": "C:\\Users\\wjjo\\Desktop\\mapping-novel\\ignore\\mutoon_settlement_gap_evidence_20260508.csv",
+    "summary": "C:\\Users\\wjjo\\Desktop\\mapping-novel\\ignore\\mutoon_settlement_gap_evidence_20260508_summary.json"
+  }
+}

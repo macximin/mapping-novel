@@ -1,0 +1,248 @@
+{
+  "base_count": 9999,
+  "base_unique": 9999,
+  "probe_terms": [
+    {
+      "term": "가",
+      "rows": 696,
+      "unique": 696,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "나",
+      "rows": 609,
+      "unique": 609,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "다",
+      "rows": 1160,
+      "unique": 1160,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "라",
+      "rows": 412,
+      "unique": 412,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "마",
+      "rows": 889,
+      "unique": 889,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "바",
+      "rows": 150,
+      "unique": 150,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "사",
+      "rows": 1257,
+      "unique": 1257,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "아",
+      "rows": 692,
+      "unique": 692,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "자",
+      "rows": 739,
+      "unique": 739,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "차",
+      "rows": 74,
+      "unique": 74,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "카",
+      "rows": 105,
+      "unique": 105,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "타",
+      "rows": 186,
+      "unique": 186,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "파",
+      "rows": 149,
+      "unique": 149,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "하",
+      "rows": 624,
+      "unique": 624,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "검",
+      "rows": 257,
+      "unique": 257,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "왕",
+      "rows": 371,
+      "unique": 371,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "천",
+      "rows": 403,
+      "unique": 403,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "신",
+      "rows": 518,
+      "unique": 518,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "공",
+      "rows": 242,
+      "unique": 242,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "연재",
+      "rows": 275,
+      "unique": 275,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "세트",
+      "rows": 104,
+      "unique": 104,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "개정",
+      "rows": 204,
+      "unique": 204,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "외전",
+      "rows": 104,
+      "unique": 104,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "로맨스",
+      "rows": 31,
+      "unique": 31,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "무협",
+      "rows": 2,
+      "unique": 2,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "사랑",
+      "rows": 253,
+      "unique": 253,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "남자",
+      "rows": 148,
+      "unique": 148,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "여자",
+      "rows": 72,
+      "unique": 72,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "공작",
+      "rows": 45,
+      "unique": 45,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "황제",
+      "rows": 49,
+      "unique": 49,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "회귀",
+      "rows": 100,
+      "unique": 100,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "환생",
+      "rows": 52,
+      "unique": 52,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "재벌",
+      "rows": 88,
+      "unique": 88,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "게임",
+      "rows": 80,
+      "unique": 80,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "1",
+      "rows": 356,
+      "unique": 356,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "2",
+      "rows": 290,
+      "unique": 290,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "3",
+      "rows": 189,
+      "unique": 189,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "A",
+      "rows": 187,
+      "unique": 187,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "a",
+      "rows": 187,
+      "unique": 187,
+      "outside_unfiltered": 0
+    },
+    {
+      "term": "the",
+      "rows": 45,
+      "unique": 45,
+      "outside_unfiltered": 0
+    }
+  ],
+  "union_unique": 9999,
+  "new_records_sample": []
+}

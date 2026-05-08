@@ -1,0 +1,37 @@
+{
+  "generated_at": "2026-05-08T16:02:38",
+  "dry_run": "C:\\Users\\wjjo\\Desktop\\mapping-novel\\판매채널-지급정산 불일치\\04_IPS_보조자료\\IPS_정산정보없음_rename_20260508\\latest__정산정보없음_ips_live_rename_full_dryrun.csv",
+  "final_write_plan": "C:\\Users\\wjjo\\Desktop\\mapping-novel\\판매채널-지급정산 불일치\\04_IPS_보조자료\\IPS_정산정보없음_rename_20260508\\20260508_160238__정산정보없음_novel_write_plan_from_live_dryrun.csv",
+  "siaane_final_plan": "C:\\Users\\wjjo\\Desktop\\업무자동화_ssot\\SIAANE_v2\\담당컨텐츠_분류\\latest__정산정보없음_novel_write_plan.csv",
+  "withheld": "C:\\Users\\wjjo\\Desktop\\mapping-novel\\판매채널-지급정산 불일치\\04_IPS_보조자료\\IPS_정산정보없음_rename_20260508\\20260508_160238__정산정보없음_write_보류_웹툰_공란.csv",
+  "dry_rows": 1068,
+  "ready_rows": 1068,
+  "write_plan_rows": 604,
+  "withheld_rows": 464,
+  "write_by_content_shape": {
+    "소설": 604
+  },
+  "withheld_by_content_shape": {
+    "웹툰": 458,
+    "": 6
+  },
+  "write_by_department": {
+    "소설편집팀": 425,
+    "소설유통팀": 88,
+    "소설2팀": 66,
+    "봄툰소설편집팀": 11,
+    "패밀리케어팀": 7,
+    "소설사업부": 6,
+    "웹툰사업부": 1
+  },
+  "withheld_by_department": {
+    "웹툰사업부": 436,
+    "소싱1팀": 9,
+    "": 6,
+    "레진콘텐츠팀": 5,
+    "IP프로듀싱팀": 4,
+    "해외사업팀": 3,
+    "봄툰소설편집팀": 1
+  },
+  "combined_marker_rows": 0
+}

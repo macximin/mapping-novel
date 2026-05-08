@@ -1,0 +1,26 @@
+{
+  "generated_at": "2026-05-08T16:07:50",
+  "source_candidates_total_content_ids": 1195,
+  "manual_risky_not_touched": 127,
+  "safe_dryrun_ready": 1068,
+  "withheld_non_novel_or_blank_not_touched": 464,
+  "novel_write_attempted": 604,
+  "novel_updated_verified_during_write": 498,
+  "novel_put_failed": 106,
+  "post_write_verify_already_named": 498,
+  "post_write_verify_remaining_ready_api": 106,
+  "paths": {
+    "final_write_plan": "C:\\Users\\wjjo\\Desktop\\mapping-novel\\판매채널-지급정산 불일치\\04_IPS_보조자료\\IPS_정산정보없음_rename_20260508\\20260508_160238__정산정보없음_novel_write_plan_from_live_dryrun.csv",
+    "write_report": "C:\\Users\\wjjo\\Desktop\\mapping-novel\\판매채널-지급정산 불일치\\04_IPS_보조자료\\IPS_정산정보없음_rename_20260508\\latest__정산정보없음_novel_ips_live_rename_write.csv",
+    "verify_report": "C:\\Users\\wjjo\\Desktop\\mapping-novel\\판매채널-지급정산 불일치\\04_IPS_보조자료\\IPS_정산정보없음_rename_20260508\\latest__정산정보없음_novel_ips_live_rename_verify.csv",
+    "success_csv": "C:\\Users\\wjjo\\Desktop\\mapping-novel\\판매채널-지급정산 불일치\\04_IPS_보조자료\\IPS_정산정보없음_rename_20260508\\latest__정산정보없음_novel_ips_live_rename_success.csv",
+    "failed_csv": "C:\\Users\\wjjo\\Desktop\\mapping-novel\\판매채널-지급정산 불일치\\04_IPS_보조자료\\IPS_정산정보없음_rename_20260508\\latest__정산정보없음_novel_ips_live_rename_failed.csv",
+    "remaining_csv": "C:\\Users\\wjjo\\Desktop\\mapping-novel\\판매채널-지급정산 불일치\\04_IPS_보조자료\\IPS_정산정보없음_rename_20260508\\latest__정산정보없음_novel_ips_live_rename_remaining.csv",
+    "withheld_non_novel_or_blank": "C:\\Users\\wjjo\\Desktop\\mapping-novel\\판매채널-지급정산 불일치\\04_IPS_보조자료\\IPS_정산정보없음_rename_20260508\\20260508_160238__정산정보없음_write_보류_웹툰_공란.csv",
+    "manual_risky": "C:\\Users\\wjjo\\Desktop\\mapping-novel\\판매채널-지급정산 불일치\\04_IPS_보조자료\\IPS_정산정보없음_rename_20260508\\20260508_155823__정산정보없음_rename_위험_수동검토.csv"
+  },
+  "failure_status_counts": {
+    "put_failed": 106
+  },
+  "failure_error_sample": "### Error updating database.  Cause: com.mysql.cj.jdbc.exceptions.MysqlDataTruncation: Data truncation: Data too long for column 'AFCH_DATA' at row 1\n### The error may exist in URL [jar:nested:/app/kds-ipmgmt-prod.jar/!BOOT-INF/classes/!/mapper/ctnsd/cntschg/IpCtnsChg.xml]\n### The error may involve com.kidaristudio.kds.ipmgmt.dao.mapper.cntsd.cntschg.IpCtnsChgMapper.insertDataChghstM-Inline\n### The error occurred while setting parameters\n### SQL: /*com.kidaristudio.kds.ipmgmt.dao.mapper.cntsd.cn"
+}

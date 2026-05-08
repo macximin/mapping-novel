@@ -15,7 +15,14 @@ ANGLE_TITLE_PATTERNS = (
     re.compile(r"〈([^〈〉]+)〉"),
     re.compile(r"《([^《》]+)》"),
 )
-DISABLED_ROW_MARKERS = ("[사용안함]", "(사용안함)", "[사용금지]", "(사용금지)")
+DISABLED_ROW_MARKERS = (
+    "[사용안함]",
+    "(사용안함)",
+    "[사용금지]",
+    "(사용금지)",
+    "[정산정보없음]",
+    "(정산정보없음)",
+)
 TITLE_EXCEPTIONS = ("24/7", "실명마제", "라마대제")
 MASTER_CONFIRMED_STATUS = "확정"
 MASTER_CONFIRMED_TRAILING_FIELD_COUNT = 4

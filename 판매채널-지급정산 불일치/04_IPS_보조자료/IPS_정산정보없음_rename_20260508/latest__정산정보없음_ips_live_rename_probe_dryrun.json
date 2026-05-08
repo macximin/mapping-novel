@@ -1,0 +1,89 @@
+{
+  "generated_at": "2026-05-08T15:59:13",
+  "write": false,
+  "summary": {
+    "ready_api": 5
+  },
+  "rows": [
+    {
+      "work_cid": "163633",
+      "target_title": "[정산정보없음]_",
+      "plan_before_title": "",
+      "current_title": "마리얼레트리",
+      "final_title": "마리얼레트리",
+      "manager_name": "정유선",
+      "status": "ready_api",
+      "reason": "dry_run",
+      "missing_required_fields": "",
+      "stuffed_fields": "",
+      "get_status": null,
+      "put_status": null,
+      "server_message": "",
+      "server_body": ""
+    },
+    {
+      "work_cid": "164475",
+      "target_title": "[정산정보없음]_",
+      "plan_before_title": "",
+      "current_title": "she&sea",
+      "final_title": "she&sea",
+      "manager_name": "정유선",
+      "status": "ready_api",
+      "reason": "dry_run",
+      "missing_required_fields": "",
+      "stuffed_fields": "",
+      "get_status": null,
+      "put_status": null,
+      "server_message": "",
+      "server_body": ""
+    },
+    {
+      "work_cid": "164506",
+      "target_title": "[정산정보없음]_",
+      "plan_before_title": "",
+      "current_title": "납골당의 어린왕자",
+      "final_title": "납골당의 어린왕자",
+      "manager_name": "정유선",
+      "status": "ready_api",
+      "reason": "dry_run",
+      "missing_required_fields": "",
+      "stuffed_fields": "",
+      "get_status": null,
+      "put_status": null,
+      "server_message": "",
+      "server_body": ""
+    },
+    {
+      "work_cid": "164891",
+      "target_title": "[정산정보없음]_",
+      "plan_before_title": "",
+      "current_title": "왕립육군 로빈중대",
+      "final_title": "왕립육군 로빈중대",
+      "manager_name": "정유선",
+      "status": "ready_api",
+      "reason": "dry_run",
+      "missing_required_fields": "",
+      "stuffed_fields": "",
+      "get_status": null,
+      "put_status": null,
+      "server_message": "",
+      "server_body": ""
+    },
+    {
+      "work_cid": "165705",
+      "target_title": "[정산정보없음]_",
+      "plan_before_title": "",
+      "current_title": "별을 찾는 모험자와 달을 지키는 기사",
+      "final_title": "별을 찾는 모험자와 달을 지키는 기사",
+      "manager_name": "정유선",
+      "status": "ready_api",
+      "reason": "dry_run",
+      "missing_required_fields": "",
+      "stuffed_fields": "",
+      "get_status": null,
+      "put_status": null,
+      "server_message": "",
+      "server_body": ""
+    }
+  ]
+}

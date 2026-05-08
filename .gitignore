@@ -11,6 +11,7 @@ venv/
 !.env.example
 .tmp_kiss_assets/
 temp/
+ignore/
 data/kiss_payment_settlement_cache*.csv
 !data/kiss_payment_settlement_cache.csv
 !data/kiss_payment_settlement_cache_part_*.csv
