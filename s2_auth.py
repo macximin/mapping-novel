@@ -16,8 +16,8 @@ SECTION_API_BASE_URL_KEYS = ("api_base_url", "base_url", "url")
 SECTION_ACCESS_TOKEN_KEYS = ("access_token", "token", "bearer_token")
 
 S2_AUTH_ERROR_MESSAGE = (
-    "S2/IPS 접속 정보가 없습니다. 앱 사이드바에 S2 ID/PW를 입력하거나 "
-    "로컬 .env, 환경변수, 또는 Streamlit Secrets에 ID/PW 또는 access token을 설정하세요."
+    "S2 ID/PW를 입력하거나, 수동으로 플랫폼별 정산정보를 입력하세요. "
+    "실패 시 ID/PW를 다시 확인하세요."
 )
 S2_AUTH_FAILURE_HINT = (
     "S2 로그인 실패: S2 ID/PW가 틀렸거나 S2 API가 인증을 거부했습니다. "
