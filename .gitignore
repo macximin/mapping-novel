@@ -2,6 +2,7 @@ __pycache__/
 *.py[cod]
 .streamlit/*
 !.streamlit/config.toml
+!.streamlit/secrets.example.toml
 .venv/
 venv/
 *.log

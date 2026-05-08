@@ -21,6 +21,14 @@ from kiss_payment_settlement import (
     payment_settlement_frame_from_api_rows,
     save_summary,
 )
+from s2_auth import (
+    S2_API_BASE_URL_KEYS,
+    S2_AUTH_ERROR_MESSAGE,
+    S2_PASSWORD_KEYS,
+    S2_USERNAME_KEYS,
+    apply_env_file,
+    first_env_value,
+)
 
 
 DEFAULT_PAGE_SIZE = 1000
@@ -153,18 +161,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def load_env(path: Path) -> None:
-    if not path.exists():
-        raise KISSRefreshError(f".env 파일이 없습니다: {path}")
-    for line in path.read_text(encoding="utf-8").splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#") or "=" not in stripped:
-            continue
-        key, value = stripped.split("=", 1)
-        key = key.strip()
-        if key:
-            import os
-
-            os.environ[key] = value.strip().strip("'\"")
+    apply_env_file(path, overwrite=False)
 
 
 def fetch_payment_settlement_rows(
@@ -193,14 +190,13 @@ def fetch_payment_settlement_rows(
 
 
 def create_authenticated_session() -> requests.Session:
-    import os
-
-    username = first_env("KLD_LOGIN_ID", "S2_ID", "IPS_ID", "KISS_ID", "KIPM_ID")
-    password = first_env("KLD_LOGIN_PW", "S2_PW", "IPS_PW", "KISS_PW", "KIPM_PW")
+    username = first_env_value(*S2_USERNAME_KEYS)
+    password = first_env_value(*S2_PASSWORD_KEYS)
     if not username or not password:
-        raise KISSRefreshError("S2/IPS 로그인 ID/PW가 .env에 없습니다.")
+        raise KISSRefreshError(S2_AUTH_ERROR_MESSAGE)
 
-    api_base_url = os.getenv("KISS_API_BASE_URL", KISS_API_BASE_URL).rstrip("/")
+    api_base_url = first_env_value(*S2_API_BASE_URL_KEYS) or KISS_API_BASE_URL
+    api_base_url = api_base_url.rstrip("/")
     session = requests.Session()
     session.headers.update(
         {
@@ -223,17 +219,6 @@ def create_authenticated_session() -> requests.Session:
     session.headers["Authorization"] = f"Bearer {token}"
     session.headers["X-KISS-API-BASE-URL"] = api_base_url
     return session
-
-
-def first_env(*keys: str) -> str:
-    import os
-
-    for key in keys:
-        value = os.getenv(key, "").strip()
-        if value:
-            return value
-    return ""
-
 
 def extract_jwt(payload: Any) -> str:
     if isinstance(payload, str) and JWT_PATTERN.match(payload):

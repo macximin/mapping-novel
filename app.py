@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from datetime import date, datetime
@@ -22,6 +23,7 @@ from settlement_adapters import (
     summarize_normalization,
 )
 from s2_transfer import build_s2_transfer, export_s2_transfer
+from s2_auth import S2_AUTH_ERROR_MESSAGE, has_s2_credentials, normalize_s2_secret_values, read_env_file
 
 
 ROOT = Path(__file__).resolve().parent
@@ -50,6 +52,27 @@ def cache_metrics(path: Path) -> dict[str, int]:
     return metrics
 
 
+def streamlit_s2_secret_values() -> dict[str, str]:
+    try:
+        return normalize_s2_secret_values(st.secrets)
+    except (FileNotFoundError, KeyError, RuntimeError):
+        return {}
+
+
+def s2_runtime_auth_config() -> dict[str, str]:
+    config: dict[str, str] = {}
+    config.update(read_env_file(S2_ENV_FILE))
+    config.update(dict(os.environ))
+    config.update(streamlit_s2_secret_values())
+    return config
+
+
+def s2_refresh_environment() -> dict[str, str]:
+    runtime_env = os.environ.copy()
+    runtime_env.update(streamlit_s2_secret_values())
+    return runtime_env
+
+
 def run_s2_refresh(mode: str, start_date: date | None = None, end_date: date | None = None) -> subprocess.CompletedProcess[str]:
     command = [
         sys.executable,
@@ -61,7 +84,7 @@ def run_s2_refresh(mode: str, start_date: date | None = None, end_date: date | N
     ]
     if mode == "custom" and start_date is not None and end_date is not None:
         command.extend(["--start-date", start_date.isoformat(), "--end-date", end_date.isoformat()])
-    return subprocess.run(command, cwd=ROOT, text=True, capture_output=True, timeout=900)
+    return subprocess.run(command, cwd=ROOT, text=True, capture_output=True, timeout=900, env=s2_refresh_environment())
 
 
 def run_s2_full_replace() -> tuple[subprocess.CompletedProcess[str], str]:
@@ -257,9 +280,11 @@ with st.sidebar:
     if "s2_refresh_error" in st.session_state:
         st.error(st.session_state.pop("s2_refresh_error"))
 
-    refresh_disabled = not S2_ENV_FILE.exists()
+    refresh_disabled = not has_s2_credentials(s2_runtime_auth_config())
     if refresh_disabled:
-        st.warning("S2/IPS 로그인 정보 파일이 없어 앱에서 최신화를 실행할 수 없습니다.")
+        st.warning(S2_AUTH_ERROR_MESSAGE)
+    else:
+        st.caption("S2/IPS 접속 정보가 설정되어 있습니다.")
 
     if st.button("S2 기준 전체 교체", disabled=refresh_disabled, use_container_width=True):
         with st.spinner("S2 기준 전체 교체 중"):
