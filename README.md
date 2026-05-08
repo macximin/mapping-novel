@@ -9,6 +9,28 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
+## Streamlit Cloud 준비
+
+Streamlit Cloud의 메인 파일은 `app.py`입니다.
+
+S2 최신화를 Cloud에서 실행하려면 앱 Secrets에 아래 값을 넣습니다. 로컬에서는 기존처럼 `.env`를 써도 되고, `.streamlit/secrets.toml`을 써도 됩니다.
+
+```toml
+S2_API_BASE_URL = "https://kiss-api.kld.kr"
+S2_ID = "..."
+S2_PW = "..."
+```
+
+예시는 `.streamlit/secrets.example.toml`에 있습니다. 실제 접속 정보는 git에 올리지 않습니다.
+
+앱은 접속 정보를 다음 순서로 인식합니다.
+
+- Streamlit Secrets
+- 환경변수
+- 로컬 `.env`
+
+Streamlit Cloud의 로컬 파일 저장소는 재시작/재배포 후 유지가 보장되지 않습니다. Cloud에서 S2 최신화를 실행하면 현재 세션의 `data/` 파일과 SQLite 이력은 사용할 수 있지만, 장기 보관이 필요하면 외부 저장소를 붙여야 합니다.
+
 ## 현재 동작
 
 - S2 기준을 중심으로 매핑합니다.
