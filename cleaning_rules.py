@@ -17,6 +17,8 @@ ANGLE_TITLE_PATTERNS = (
 )
 DISABLED_ROW_MARKERS = ("[사용안함]", "(사용안함)", "[사용금지]", "(사용금지)")
 TITLE_EXCEPTIONS = ("24/7", "실명마제", "라마대제")
+MASTER_CONFIRMED_STATUS = "확정"
+MASTER_CONFIRMED_TRAILING_FIELD_COUNT = 4
 
 
 @dataclass(frozen=True)
@@ -24,6 +26,8 @@ class CleaningPolicy:
     disabled_row_markers: tuple[str, ...] = DISABLED_ROW_MARKERS
     title_exceptions: tuple[str, ...] = TITLE_EXCEPTIONS
     angle_title_patterns: tuple[Pattern[str], ...] = ANGLE_TITLE_PATTERNS
+    master_confirmed_status: str = MASTER_CONFIRMED_STATUS
+    master_confirmed_trailing_field_count: int = MASTER_CONFIRMED_TRAILING_FIELD_COUNT
 
     def text(self, value: Any) -> str:
         if value is None:
@@ -123,13 +127,21 @@ class CleaningPolicy:
             if match and self.text(match.group(1)):
                 return self.text(match.group(1))
 
-        parts = [part.strip() for part in raw.split("_") if part.strip()]
-        if len(parts) >= 5 and self.clean_title(parts[-1]) == self.clean_title("확정"):
-            candidate = "_".join(parts[:-4]).strip()
-            if candidate:
-                return candidate
+        confirmed_master_title = self.extract_confirmed_master_title(raw)
+        if confirmed_master_title:
+            return confirmed_master_title
 
         return raw
+
+    def extract_confirmed_master_title(self, value: Any) -> str:
+        raw = unicodedata.normalize("NFKC", self.text(value))
+        parts = [part.strip() for part in raw.split("_") if part.strip()]
+        tail_count = self.master_confirmed_trailing_field_count
+        if len(parts) <= tail_count:
+            return ""
+        if self.clean_title(parts[-1]) != self.clean_title(self.master_confirmed_status):
+            return ""
+        return "_".join(parts[:-tail_count]).strip()
 
     def clean_master_title(self, value: Any) -> str:
         return self.clean_title(self.extract_master_work_title(value))
@@ -160,6 +172,10 @@ def clean_title(value: Any) -> str:
 
 def extract_master_work_title(value: Any) -> str:
     return DEFAULT_CLEANING_POLICY.extract_master_work_title(value)
+
+
+def extract_confirmed_master_title(value: Any) -> str:
+    return DEFAULT_CLEANING_POLICY.extract_confirmed_master_title(value)
 
 
 def clean_master_title(value: Any) -> str:

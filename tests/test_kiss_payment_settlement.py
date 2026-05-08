@@ -138,7 +138,10 @@ class KissPaymentSettlementTest(unittest.TestCase):
             [
                 row("정상 작품", "301"),
                 row("[사용안함]_삭제 작품", "302"),
-                row("작가 칸 표식 작품", "303", "(사용금지)"),
+                row("(사용안함)_삭제 작품", "303"),
+                row("[사용금지]_삭제 작품", "304"),
+                row("(사용금지)_삭제 작품", "305"),
+                row("작가 칸 표식 작품", "306", "(사용금지)"),
             ]
         )
 
@@ -162,6 +165,34 @@ class KissPaymentSettlementTest(unittest.TestCase):
             self.assertEqual(lookup["판매채널콘텐츠ID"].tolist(), ["301"])
             self.assertNotIn("사용안함", cache_path.read_text(encoding="utf-8-sig"))
             self.assertNotIn("사용금지", lookup_path.read_text(encoding="utf-8-sig"))
+
+    def test_confirmed_master_suffix_variants_are_simplified_in_s2_lookup(self) -> None:
+        def row(title: str, sales_channel_content_id: str) -> dict[str, object]:
+            return {
+                "승인상태": "승인",
+                "지급정산상태": "운영중",
+                "판매채널명": "테스트 채널",
+                "콘텐츠형태": "소설",
+                "콘텐츠명": title,
+                "작가명": "말리브해적",
+                "지급정산마스터 등록 일자": "2026-05-08 11:00:00",
+                "지급정산마스터ID": f"M-{sales_channel_content_id}",
+                "지급정산상세ID": f"D-{sales_channel_content_id}",
+                "콘텐츠ID": f"C-{sales_channel_content_id}",
+                "판매채널콘텐츠ID": sales_channel_content_id,
+            }
+
+        frame = pd.DataFrame(
+            [
+                row("재벌가 차남은 먼치킨_말리브해적_1003258_472_확정", "401"),
+                row("작품A_작가_1003258_미연결_확정", "402"),
+                row("작품B_작가_1003258_선인세없음_확정", "403"),
+            ]
+        )
+
+        lookup = to_s2_lookup(frame)
+
+        self.assertEqual(lookup["콘텐츠명"].tolist(), ["재벌가 차남은 먼치킨", "작품A", "작품B"])
 
     def test_summary_counts_sales_channel_content_conflicts(self) -> None:
         frame = payment_settlement_frame_from_api_rows(
