@@ -542,14 +542,18 @@ def inject_compact_layout_css() -> None:
         """
         <style>
         .block-container {
-            padding-top: 1.8rem;
+            padding-top: 1.55rem;
             padding-bottom: 1.25rem;
         }
-        h1 {
-            font-size: 2rem !important;
-            line-height: 1.25 !important;
-            padding-top: 0.1rem !important;
-            margin-bottom: 0.15rem !important;
+        .app-title {
+            display: block;
+            color: #111827;
+            font-size: 2rem;
+            font-weight: 700;
+            line-height: 1.45;
+            margin: 0 0 0.2rem 0;
+            padding: 0.2rem 0 0.05rem 0;
+            overflow: visible;
         }
         h2, h3 {
             margin-top: 0.65rem !important;
@@ -652,7 +656,7 @@ def inject_compact_layout_css() -> None:
 
 st.set_page_config(page_title="S2 소설 매핑", layout="wide")
 inject_compact_layout_css()
-st.title("S2 소설 매핑")
+st.markdown('<div class="app-title">S2 소설 매핑</div>', unsafe_allow_html=True)
 st.caption("플랫폼별 정산서 엑셀을 S2 기준에 매핑합니다.")
 
 with st.sidebar:
