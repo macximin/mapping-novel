@@ -51,6 +51,8 @@ class SettlementAdapterFixtureTest(unittest.TestCase):
         for fixture in fixtures:
             with self.subTest(platform=fixture["platform"], relative_path=fixture["relative_path"]):
                 path = self.root / fixture["relative_path"]
+                if not path.exists():
+                    self.skipTest(f"정산상세 fixture 파일이 없습니다: {path}")
                 result = normalize_settlement(path, platform=fixture["platform"], source_name=fixture["relative_path"])
                 summary = summarize_normalization(result)
 

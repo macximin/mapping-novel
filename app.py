@@ -421,6 +421,19 @@ def effective_platform_for_file(uploaded_file: object, selected_s2_channel: str)
     return platform_for_s2_sales_channel(s2_channel) or ""
 
 
+def s2_channel_schema_frame() -> pd.DataFrame:
+    rows: list[dict[str, str]] = []
+    for s2_channel, platform in sorted(s2_sales_channel_to_platform().items(), key=lambda item: (item[1], item[0])):
+        rows.append(
+            {
+                "업무명": platform,
+                "파일명에 넣을 S2 판매채널명": s2_channel,
+                "파일명 예시": f"2026-04_{s2_channel}_정산상세.xlsx",
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 def load_selected_s2_basis(
     *,
     use_payment_cache: bool,
@@ -895,6 +908,10 @@ if settlement_files:
         st.dataframe(pd.DataFrame(platform_rows), use_container_width=True, height=min(180, 40 + 28 * len(platform_rows)))
 else:
     st.caption("파일명에 실제 S2 판매채널명을 넣거나, 드롭다운에서 직접 선택하세요. 예: 카카오페이지(소설), 구글(소설), 네이버_장르")
+
+with st.expander("판매채널명 스키마", expanded=False):
+    st.caption("파일명 안에 아래 S2 판매채널명 중 하나가 들어 있으면 자동감지됩니다.")
+    st.dataframe(s2_channel_schema_frame(), use_container_width=True, height=260)
 
 
 s2_source_options = ["수동 S2 파일 업로드"]
