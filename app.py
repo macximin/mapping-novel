@@ -537,7 +537,84 @@ def build_batch_zip(results: list[dict[str, Any]], summary_frame: pd.DataFrame) 
     return buffer.getvalue()
 
 
+def inject_compact_layout_css() -> None:
+    st.markdown(
+        """
+        <style>
+        .block-container {
+            padding-top: 1.1rem;
+            padding-bottom: 1.25rem;
+        }
+        h1 {
+            font-size: 2rem !important;
+            margin-bottom: 0.15rem !important;
+        }
+        h2, h3 {
+            margin-top: 0.65rem !important;
+            margin-bottom: 0.35rem !important;
+        }
+        div[data-testid="stVerticalBlock"] {
+            gap: 0.45rem;
+        }
+        div[data-testid="stHorizontalBlock"] {
+            gap: 0.7rem;
+        }
+        div[data-testid="stAlert"] {
+            padding: 0.5rem 0.75rem;
+        }
+        div[data-testid="stFileUploader"] {
+            min-width: 0;
+        }
+        div[data-testid="stFileUploader"] label {
+            margin-bottom: 0.2rem;
+        }
+        section[data-testid="stFileUploaderDropzone"] {
+            min-height: 3.1rem;
+            padding: 0.35rem 0.65rem;
+            overflow: hidden;
+        }
+        section[data-testid="stFileUploaderDropzone"] > div {
+            gap: 0.35rem;
+        }
+        section[data-testid="stFileUploaderDropzone"] button {
+            min-height: 2rem;
+            padding: 0.25rem 0.7rem;
+            white-space: nowrap;
+        }
+        section[data-testid="stFileUploaderDropzone"] small,
+        div[data-testid="stFileUploaderDropzoneInstructions"] {
+            display: none;
+        }
+        div[data-testid="stFileUploaderFile"] {
+            min-height: 2rem;
+            padding: 0.2rem 0.5rem;
+            margin-top: 0.2rem;
+        }
+        div[data-testid="stFileUploaderFile"] p,
+        div[data-testid="stFileUploaderFile"] span {
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        div[data-testid="stFileUploader"] > div:last-child {
+            max-height: 6.25rem;
+            overflow: auto;
+        }
+        div[data-testid="stExpander"] details {
+            padding-top: 0.15rem;
+        }
+        div[data-testid="stExpander"] summary {
+            min-height: 2rem;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 st.set_page_config(page_title="S2 소설 매핑", layout="wide")
+inject_compact_layout_css()
 st.title("S2 소설 매핑")
 st.caption("플랫폼별 정산서 엑셀을 S2 기준에 매핑합니다.")
 
@@ -636,7 +713,7 @@ with st.sidebar:
                 st.dataframe(change_detail, use_container_width=True, height=260)
 
 
-st.info("정산서 업로드 -> 엑셀 파일명 기반 플랫폼 자동감지 -> 어댑터 정규화 -> S2 매핑 -> 결과 엑셀 다운로드")
+st.caption("정산서 업로드 -> 플랫폼 감지 -> S2 매핑 -> 다운로드")
 
 st.subheader("1. 플랫폼별 정산서 업로드")
 upload_cols = st.columns([2, 1])
@@ -674,7 +751,8 @@ if settlement_files:
             st.warning(f"플랫폼을 감지하지 못한 파일 {len(undetected_files):,}개가 있습니다. 플랫폼을 직접 선택하세요.")
     else:
         st.info(f"직접 선택한 플랫폼으로 모든 파일을 처리합니다: {selected_platform}")
-    st.dataframe(pd.DataFrame(platform_rows), use_container_width=True, height=min(260, 45 + 35 * len(platform_rows)))
+    with st.expander("파일별 플랫폼", expanded=bool(undetected_files)):
+        st.dataframe(pd.DataFrame(platform_rows), use_container_width=True, height=min(180, 40 + 28 * len(platform_rows)))
 else:
     st.caption("자동감지는 엑셀 파일명 기반입니다. 파일명에 플랫폼명이 없으면 플랫폼을 직접 선택하세요.")
 
