@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import io
 import os
 import subprocess
 import sys
+import zipfile
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -371,6 +373,170 @@ def render_error_detail(exc: Exception) -> None:
         st.exception(exc)
 
 
+def sanitize_output_stem(raw_name: object) -> str:
+    file_name = text(raw_name)
+    if file_name.lower().endswith(".xlsx"):
+        file_name = file_name[:-5]
+    return "".join(ch if ch not in r'\/:*?"<>|' else "_" for ch in file_name).strip()
+
+
+def default_mapping_stem(uploaded_file: object) -> str:
+    name = text(getattr(uploaded_file, "name", "")) or text(uploaded_file) or "mapping_result"
+    return sanitize_output_stem(f"{Path(name).stem}_매핑") or f"mapping_result_{datetime.now().strftime('%Y%m%d_%H%M')}"
+
+
+def effective_platform_for_file(uploaded_file: object, selected_platform: str) -> str:
+    if selected_platform == AUTO_PLATFORM_OPTION:
+        return detect_platform(text(getattr(uploaded_file, "name", ""))) or ""
+    return selected_platform
+
+
+def load_selected_s2_basis(
+    *,
+    use_payment_cache: bool,
+    payment_settlement_file: object | None,
+    s2_file: object | None,
+) -> tuple[pd.DataFrame, str, dict[str, Any] | None]:
+    if payment_settlement_file is not None:
+        payment_df = load_payment_settlement_list(payment_settlement_file)
+        return to_s2_lookup(payment_df), "수동 S2 원천 엑셀", summarize_payment_settlement(payment_df)
+    if use_payment_cache:
+        return pd.read_csv(S2_SOURCE_LOOKUP, dtype=object), "로컬 S2 기준", None
+    s2_df, s2_source_label, payment_summary = load_manual_s2_reference(s2_file)
+    return s2_df, s2_source_label, payment_summary
+
+
+def process_settlement_batch_item(
+    *,
+    settlement_file: object,
+    selected_platform: str,
+    s2_df: pd.DataFrame,
+    master_df: pd.DataFrame | None,
+    output_stem: str,
+) -> dict[str, Any]:
+    source_name = text(getattr(settlement_file, "name", "uploaded.xlsx"))
+    effective_platform = effective_platform_for_file(settlement_file, selected_platform)
+    result: dict[str, Any] = {
+        "source_name": source_name,
+        "output_stem": output_stem,
+        "platform": effective_platform,
+        "status": "failed",
+        "error": "",
+        "blocking_messages": [],
+        "warning_messages": [],
+        "mapping_bytes": b"",
+        "transfer_bytes": b"",
+    }
+
+    try:
+        if hasattr(settlement_file, "seek"):
+            settlement_file.seek(0)
+        adapter_result = normalize_settlement(
+            settlement_file,
+            platform=None if selected_platform == AUTO_PLATFORM_OPTION else selected_platform,
+            source_name=source_name,
+        )
+        adapter_summary = summarize_normalization(adapter_result)
+        audit_df = adapter_audit_dataframe(adapter_result)
+        blocking_messages = adapter_blocking_messages(adapter_result)
+        warning_messages = adapter_warning_messages(adapter_result)
+        result.update(
+            {
+                "adapter_result": adapter_result,
+                "adapter_summary": adapter_summary,
+                "audit_df": audit_df,
+                "blocking_messages": blocking_messages,
+                "warning_messages": warning_messages,
+            }
+        )
+        if blocking_messages:
+            result["status"] = "blocked"
+            result["error"] = " | ".join(blocking_messages)
+            return result
+
+        settlement_df = adapter_result.to_mapping_feed()
+        mapping = build_mapping(s2_df, settlement_df, master_df)
+        summary = dict(zip(mapping.summary["항목"], mapping.summary["값"]))
+        s2_transfer = build_s2_transfer(
+            mapping.rows,
+            amount_policy_locked=adapter_result.spec.s2_amount_policy_locked,
+            s2_gate=adapter_result.spec.s2_gate,
+        )
+        result.update(
+            {
+                "status": "success",
+                "mapping": mapping,
+                "summary": summary,
+                "s2_transfer": s2_transfer,
+                "mapping_bytes": export_mapping(mapping),
+                "transfer_bytes": export_s2_transfer(s2_transfer) if s2_transfer.exportable else b"",
+            }
+        )
+        return result
+    except Exception as exc:
+        result["status"] = "failed"
+        result["error"] = f"{type(exc).__name__}: {exc}"
+        return result
+
+
+def batch_summary_frame(results: list[dict[str, Any]]) -> pd.DataFrame:
+    rows: list[dict[str, Any]] = []
+    for result in results:
+        adapter_summary = result.get("adapter_summary", {})
+        mapping_summary = result.get("summary", {})
+        transfer = result.get("s2_transfer")
+        transfer_exportable = "Y" if getattr(transfer, "exportable", False) else "N"
+        rows.append(
+            {
+                "파일": result.get("source_name", ""),
+                "상태": result.get("status", ""),
+                "플랫폼": result.get("platform", ""),
+                "원본 파싱 행": adapter_summary.get("parsed_rows", ""),
+                "S2 매핑 입력 행": adapter_summary.get("default_feed_rows", ""),
+                "S2 matched": mapping_summary.get("S2 matched", ""),
+                "검토필요": mapping_summary.get("검토필요 행 수", ""),
+                "S2 전송자료": transfer_exportable,
+                "메시지": result.get("error", ""),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def unique_archive_name(name: str, used_names: set[str]) -> str:
+    candidate = name
+    path = Path(name)
+    suffix = path.suffix
+    stem = path.stem
+    counter = 2
+    while candidate in used_names:
+        candidate = f"{stem}_{counter}{suffix}"
+        counter += 1
+    used_names.add(candidate)
+    return candidate
+
+
+def build_batch_zip(results: list[dict[str, Any]], summary_frame: pd.DataFrame) -> bytes:
+    buffer = io.BytesIO()
+    used_names: set[str] = set()
+    with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(
+            unique_archive_name("batch_summary.csv", used_names),
+            summary_frame.to_csv(index=False).encode("utf-8-sig"),
+        )
+        for result in results:
+            output_stem = text(result.get("output_stem")) or default_mapping_stem(result.get("source_name", "mapping_result"))
+            mapping_bytes = result.get("mapping_bytes") or b""
+            transfer_bytes = result.get("transfer_bytes") or b""
+            if mapping_bytes:
+                archive.writestr(unique_archive_name(f"{output_stem}.xlsx", used_names), mapping_bytes)
+            if transfer_bytes:
+                archive.writestr(unique_archive_name(f"{output_stem}_S2전송자료.xlsx", used_names), transfer_bytes)
+            if result.get("status") != "success":
+                error_text = text(result.get("error")) or "처리하지 못했습니다."
+                archive.writestr(unique_archive_name(f"{output_stem}_오류.txt", used_names), error_text.encode("utf-8"))
+    return buffer.getvalue()
+
+
 st.set_page_config(page_title="S2 소설 매핑", layout="wide")
 st.title("S2 소설 매핑")
 st.caption("플랫폼별 정산서 엑셀을 S2 기준에 매핑합니다.")
@@ -475,7 +641,7 @@ st.info("정산서 업로드 -> 엑셀 파일명 기반 플랫폼 자동감지 -
 st.subheader("1. 플랫폼별 정산서 업로드")
 upload_cols = st.columns([2, 1])
 with upload_cols[0]:
-    settlement_file = st.file_uploader("플랫폼별 정산서 엑셀", type=["xlsx"])
+    settlement_files = st.file_uploader("플랫폼별 정산서 엑셀 (여러 개 가능)", type=["xlsx"], accept_multiple_files=True)
 with upload_cols[1]:
     platform_options = [AUTO_PLATFORM_OPTION] + list_platforms()
     selected_platform = st.selectbox(
@@ -484,15 +650,31 @@ with upload_cols[1]:
         help="자동감지는 엑셀 파일명에 들어 있는 플랫폼명 또는 별칭만 사용합니다.",
     )
 
-detected_platform = detect_platform(settlement_file.name) if settlement_file is not None else None
-if settlement_file is not None:
+settlement_files = list(settlement_files or [])
+platform_rows = []
+undetected_files = []
+for uploaded_file in settlement_files:
+    detected_platform = detect_platform(uploaded_file.name)
+    effective_platform = effective_platform_for_file(uploaded_file, selected_platform)
+    if selected_platform == AUTO_PLATFORM_OPTION and not effective_platform:
+        undetected_files.append(uploaded_file.name)
+    platform_rows.append(
+        {
+            "파일": uploaded_file.name,
+            "감지 플랫폼": detected_platform or "",
+            "처리 플랫폼": effective_platform or "직접 선택 필요",
+        }
+    )
+
+if settlement_files:
     if selected_platform == AUTO_PLATFORM_OPTION:
-        if detected_platform:
-            st.success(f"엑셀 파일명 기반 자동감지 결과: {detected_platform}")
+        if not undetected_files:
+            st.success(f"엑셀 파일명 기반 자동감지 완료: {len(settlement_files):,}개")
         else:
-            st.warning("엑셀 파일명으로 플랫폼을 감지하지 못했습니다. 플랫폼을 직접 선택하세요.")
+            st.warning(f"플랫폼을 감지하지 못한 파일 {len(undetected_files):,}개가 있습니다. 플랫폼을 직접 선택하세요.")
     else:
-        st.info(f"직접 선택한 플랫폼으로 처리합니다: {selected_platform}")
+        st.info(f"직접 선택한 플랫폼으로 모든 파일을 처리합니다: {selected_platform}")
+    st.dataframe(pd.DataFrame(platform_rows), use_container_width=True, height=min(260, 45 + 35 * len(platform_rows)))
 else:
     st.caption("자동감지는 엑셀 파일명 기반입니다. 파일명에 플랫폼명이 없으면 플랫폼을 직접 선택하세요.")
 
@@ -569,20 +751,22 @@ with st.expander("IPS 보조 검산", expanded=False):
 
 
 st.subheader("3. 정규화 및 S2 매핑")
-default_name = "mapping_result"
-if settlement_file is not None:
-    default_name = f"{Path(settlement_file.name).stem}_매핑"
-output_name = st.text_input("결과 엑셀 파일명", value=default_name)
+single_output_name = ""
+if len(settlement_files) == 1:
+    single_output_name = st.text_input("결과 엑셀 파일명", value=default_mapping_stem(settlement_files[0]))
+elif len(settlement_files) > 1:
+    st.caption("복수 처리 결과는 파일별 `{원본파일명}_매핑.xlsx`로 만들고 ZIP으로 묶습니다.")
 
 has_s2_source = s2_file is not None or payment_settlement_file is not None or use_payment_cache
-can_run = settlement_file is not None and has_s2_source and (selected_platform != AUTO_PLATFORM_OPTION or detected_platform is not None)
+all_platforms_ready = selected_platform != AUTO_PLATFORM_OPTION or not undetected_files
+can_run = bool(settlement_files) and has_s2_source and all_platforms_ready
 if not can_run:
     missing: list[str] = []
-    if settlement_file is None:
+    if not settlement_files:
         missing.append("플랫폼별 정산서 엑셀")
     if not has_s2_source:
         missing.append("S2 기준")
-    if settlement_file is not None and selected_platform == AUTO_PLATFORM_OPTION and detected_platform is None:
+    if settlement_files and not all_platforms_ready:
         missing.append("플랫폼 직접 선택")
     st.warning(" / ".join(missing) + "이 필요합니다.")
 
@@ -591,33 +775,34 @@ if not run_clicked:
     st.stop()
 
 try:
-    payment_summary: dict[str, Any] | None = None
+    results: list[dict[str, Any]] = []
     with st.status("S2 기준과 정산서 엑셀을 처리하는 중", expanded=True) as status:
         st.write("S2 기준 불러오는 중")
-        if payment_settlement_file is not None:
-            payment_df = load_payment_settlement_list(payment_settlement_file)
-            payment_summary = summarize_payment_settlement(payment_df)
-            s2_df = to_s2_lookup(payment_df)
-            s2_source_label = "수동 S2 원천 엑셀"
-        elif use_payment_cache:
-            s2_df = pd.read_csv(S2_SOURCE_LOOKUP, dtype=object)
-            s2_source_label = "로컬 S2 기준"
-        else:
-            s2_df, s2_source_label, payment_summary = load_manual_s2_reference(s2_file)
-
-        st.write("어댑터 정규화 중")
-        adapter_result = normalize_settlement(
-            settlement_file,
-            platform=None if selected_platform == AUTO_PLATFORM_OPTION else selected_platform,
-            source_name=settlement_file.name,
+        s2_df, s2_source_label, payment_summary = load_selected_s2_basis(
+            use_payment_cache=use_payment_cache,
+            payment_settlement_file=payment_settlement_file,
+            s2_file=s2_file,
         )
-        adapter_summary = summarize_normalization(adapter_result)
-        settlement_df = adapter_result.to_mapping_feed()
-        status.update(label="정규화 완료", state="complete")
+
+        for idx, settlement_file in enumerate(settlement_files, start=1):
+            st.write(f"{idx:,}/{len(settlement_files):,} 처리 중: {settlement_file.name}")
+            if len(settlement_files) == 1:
+                raw_output_stem = single_output_name or default_mapping_stem(settlement_file)
+            else:
+                raw_output_stem = default_mapping_stem(settlement_file)
+            output_stem = sanitize_output_stem(raw_output_stem) or default_mapping_stem(settlement_file)
+            results.append(
+                process_settlement_batch_item(
+                    settlement_file=settlement_file,
+                    selected_platform=selected_platform,
+                    s2_df=s2_df,
+                    master_df=master_df,
+                    output_stem=output_stem,
+                )
+            )
+        status.update(label="처리 완료", state="complete")
 except Exception as exc:
-    st.error("입력 파일을 처리하지 못했습니다.")
-    if settlement_file is not None:
-        st.warning("어댑터가 이 엑셀 파일을 처리하지 못했거나, 엑셀 파일명 기반 자동감지에 실패했을 수 있습니다.")
+    st.error("S2 기준 또는 입력 파일을 처리하지 못했습니다.")
     render_error_detail(exc)
     st.stop()
 
@@ -633,94 +818,105 @@ if payment_summary is not None:
         st.dataframe(s2_source_summary_frame(payment_summary), use_container_width=True, height=260)
 
 
-st.subheader("어댑터 정규화")
-adapter_cols = st.columns(5)
-adapter_cols[0].metric("플랫폼", adapter_summary["platform"])
-adapter_cols[1].metric("원본 파싱 행", f"{safe_int(adapter_summary['parsed_rows']):,}")
-adapter_cols[2].metric("S2 매핑 입력 행", f"{safe_int(adapter_summary['default_feed_rows']):,}")
-adapter_cols[3].metric("금액 검증", adapter_summary["amount_rule_status"])
-adapter_cols[4].metric("S2 금액 잠금", "Y" if adapter_summary["s2_amount_policy_locked"] else "N")
-st.caption(adapter_summary["s2_gate"])
+st.subheader("처리 결과")
+summary_frame = batch_summary_frame(results)
+status_counts = summary_frame["상태"].value_counts().to_dict() if not summary_frame.empty else {}
+batch_cols = st.columns(4)
+batch_cols[0].metric("전체 파일", f"{len(results):,}")
+batch_cols[1].metric("성공", f"{safe_int(status_counts.get('success')):,}")
+batch_cols[2].metric("차단", f"{safe_int(status_counts.get('blocked')):,}")
+batch_cols[3].metric("실패", f"{safe_int(status_counts.get('failed')):,}")
+st.dataframe(summary_frame, use_container_width=True, height=min(360, 45 + 35 * max(len(summary_frame), 1)))
 
-audit_df = adapter_audit_dataframe(adapter_result)
-blocking_messages = adapter_blocking_messages(adapter_result)
-warning_messages = adapter_warning_messages(adapter_result)
-
-for message in blocking_messages:
-    st.error(message)
-for message in warning_messages:
-    st.warning(message)
-
-if blocking_messages:
-    st.error("어댑터 검증에서 차단되어 S2 매핑을 멈췄습니다.")
-    st.dataframe(audit_df, use_container_width=True, height=260)
-    st.stop()
-
-try:
-    mapping = build_mapping(s2_df, settlement_df, master_df)
-except Exception as exc:
-    st.error("표준화된 정산서 재료를 S2 매핑 엔진에 넣는 데 실패했습니다.")
-    st.dataframe(audit_df, use_container_width=True, height=260)
-    render_error_detail(exc)
-    st.stop()
-
-
-summary = dict(zip(mapping.summary["항목"], mapping.summary["값"]))
-cols = st.columns(5)
-cols[0].metric("정산서 행", f"{safe_int(summary.get('정산서 행 수')):,}")
-cols[1].metric("검토필요", f"{safe_int(summary.get('검토필요 행 수')):,}")
-cols[2].metric("S2 matched", f"{safe_int(summary.get('S2 matched')):,}")
-cols[3].metric("S2 콘텐츠ID", f"{safe_int(summary.get('S2 콘텐츠ID present')):,}")
-cols[4].metric("중복 후보키", f"{safe_int(summary.get('중복 후보 정제키 수')):,}")
-
-with st.expander("어댑터 시트별 감사", expanded=False):
-    st.dataframe(audit_df, use_container_width=True, height=260)
-
-st.subheader("행별 매핑 결과")
-st.dataframe(mapping.rows, use_container_width=True, height=420)
-
-tab_review, tab_dups, tab_validation = st.tabs(["검토필요", "중복후보", "입력검증"])
-with tab_review:
-    st.dataframe(mapping.review_rows, use_container_width=True, height=320)
-with tab_dups:
-    st.dataframe(mapping.duplicate_candidates, use_container_width=True, height=320)
-with tab_validation:
-    st.dataframe(mapping.input_validation, use_container_width=True, height=320)
-
-
-file_name = output_name.strip() or f"mapping_result_{datetime.now().strftime('%Y%m%d_%H%M')}"
-if file_name.lower().endswith(".xlsx"):
-    file_name = file_name[:-5]
-file_name = "".join(ch if ch not in r'\/:*?"<>|' else "_" for ch in file_name)
-
-st.subheader("S2 전송자료")
-s2_transfer = build_s2_transfer(
-    mapping.rows,
-    amount_policy_locked=adapter_result.spec.s2_amount_policy_locked,
-    s2_gate=adapter_result.spec.s2_gate,
-)
-transfer_summary = dict(zip(s2_transfer.summary["항목"], s2_transfer.summary["값"]))
-transfer_cols = st.columns(3)
-transfer_cols[0].metric("전송 가능", transfer_summary.get("전송 가능", "N"))
-transfer_cols[1].metric("전송 후보 행", f"{safe_int(transfer_summary.get('전송 후보 행 수')):,}")
-transfer_cols[2].metric("차단 행", f"{safe_int(transfer_summary.get('차단 행 수')):,}")
-for message in s2_transfer.blocking_messages:
-    st.warning(message)
-with st.expander("S2 전송자료 사전검증", expanded=False):
-    st.dataframe(s2_transfer.summary, use_container_width=True, height=160)
-    if not s2_transfer.blocked_rows.empty:
-        st.dataframe(s2_transfer.blocked_rows, use_container_width=True, height=260)
-if s2_transfer.exportable:
-    st.download_button(
-        "S2 전송자료 다운로드",
-        export_s2_transfer(s2_transfer),
-        file_name=f"{file_name}_S2전송자료.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
-
+zip_name = f"mapping_results_{datetime.now().strftime('%Y%m%d_%H%M')}.zip"
 st.download_button(
-    "결과 엑셀 다운로드",
-    export_mapping(mapping),
-    file_name=f"{file_name}.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "전체 결과 ZIP 다운로드",
+    build_batch_zip(results, summary_frame),
+    file_name=zip_name,
+    mime="application/zip",
+    disabled=not results,
 )
+
+for idx, result in enumerate(results, start=1):
+    status_label = text(result.get("status"))
+    source_name = text(result.get("source_name"))
+    expanded = len(results) == 1
+    with st.expander(f"{source_name} - {status_label}", expanded=expanded):
+        adapter_summary = result.get("adapter_summary")
+        if adapter_summary:
+            st.subheader("어댑터 정규화")
+            adapter_cols = st.columns(5)
+            adapter_cols[0].metric("플랫폼", adapter_summary["platform"])
+            adapter_cols[1].metric("원본 파싱 행", f"{safe_int(adapter_summary['parsed_rows']):,}")
+            adapter_cols[2].metric("S2 매핑 입력 행", f"{safe_int(adapter_summary['default_feed_rows']):,}")
+            adapter_cols[3].metric("금액 검증", adapter_summary["amount_rule_status"])
+            adapter_cols[4].metric("S2 금액 잠금", "Y" if adapter_summary["s2_amount_policy_locked"] else "N")
+            st.caption(adapter_summary["s2_gate"])
+
+        for message in result.get("blocking_messages", []):
+            st.error(message)
+        for message in result.get("warning_messages", []):
+            st.warning(message)
+
+        audit_df = result.get("audit_df")
+        if audit_df is not None:
+            with st.expander("어댑터 시트별 감사", expanded=False):
+                st.dataframe(audit_df, use_container_width=True, height=260)
+
+        if status_label != "success":
+            st.error(result.get("error") or "처리하지 못했습니다.")
+            continue
+
+        mapping = result["mapping"]
+        mapping_summary = result["summary"]
+        cols = st.columns(5)
+        cols[0].metric("정산서 행", f"{safe_int(mapping_summary.get('정산서 행 수')):,}")
+        cols[1].metric("검토필요", f"{safe_int(mapping_summary.get('검토필요 행 수')):,}")
+        cols[2].metric("S2 matched", f"{safe_int(mapping_summary.get('S2 matched')):,}")
+        cols[3].metric("S2 콘텐츠ID", f"{safe_int(mapping_summary.get('S2 콘텐츠ID present')):,}")
+        cols[4].metric("중복 후보키", f"{safe_int(mapping_summary.get('중복 후보 정제키 수')):,}")
+
+        st.subheader("행별 매핑 결과")
+        st.dataframe(mapping.rows, use_container_width=True, height=420)
+
+        tab_review, tab_dups, tab_validation = st.tabs(["검토필요", "중복후보", "입력검증"])
+        with tab_review:
+            st.dataframe(mapping.review_rows, use_container_width=True, height=320)
+        with tab_dups:
+            st.dataframe(mapping.duplicate_candidates, use_container_width=True, height=320)
+        with tab_validation:
+            st.dataframe(mapping.input_validation, use_container_width=True, height=320)
+
+        st.subheader("S2 전송자료")
+        s2_transfer = result["s2_transfer"]
+        transfer_summary = dict(zip(s2_transfer.summary["항목"], s2_transfer.summary["값"]))
+        transfer_cols = st.columns(3)
+        transfer_cols[0].metric("전송 가능", transfer_summary.get("전송 가능", "N"))
+        transfer_cols[1].metric("전송 후보 행", f"{safe_int(transfer_summary.get('전송 후보 행 수')):,}")
+        transfer_cols[2].metric("차단 행", f"{safe_int(transfer_summary.get('차단 행 수')):,}")
+        for message in s2_transfer.blocking_messages:
+            st.warning(message)
+        with st.expander("S2 전송자료 사전검증", expanded=False):
+            st.dataframe(s2_transfer.summary, use_container_width=True, height=160)
+            if not s2_transfer.blocked_rows.empty:
+                st.dataframe(s2_transfer.blocked_rows, use_container_width=True, height=260)
+
+        output_stem = text(result.get("output_stem")) or default_mapping_stem(source_name)
+        download_cols = st.columns(2)
+        with download_cols[0]:
+            st.download_button(
+                "결과 엑셀 다운로드",
+                result["mapping_bytes"],
+                file_name=f"{output_stem}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key=f"mapping_download_{idx}",
+            )
+        with download_cols[1]:
+            if s2_transfer.exportable:
+                st.download_button(
+                    "S2 전송자료 다운로드",
+                    result["transfer_bytes"],
+                    file_name=f"{output_stem}_S2전송자료.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key=f"s2_transfer_download_{idx}",
+                )
