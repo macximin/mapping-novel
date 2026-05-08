@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import io
+import json
 import os
 import subprocess
 import sys
@@ -48,6 +49,7 @@ DATA_DIR = ROOT / "data"
 KIDARI_NOVEL_MASTER = DATA_DIR / "kidari_contents.xlsx"
 S2_SOURCE_LOOKUP = DATA_DIR / "kiss_payment_settlement_s2_lookup.csv"
 S2_HISTORY_DB = DATA_DIR / "kiss_refresh_history.sqlite"
+S2_BASELINE_SUMMARY_NAME = "kiss_payment_settlement_refresh_summary.json"
 S2_REFRESH_SCRIPT = ROOT / "scripts" / "refresh_kiss_payment_settlement.py"
 S2_ENV_FILE = ROOT / ".env"
 S2_REFRESH_START_DATE = date(1900, 1, 1)
@@ -310,6 +312,21 @@ def history_frame(limit: int = 10) -> pd.DataFrame:
             }
         ).fillna(frame["조회범위"])
     return frame
+
+
+def repo_s2_baseline_summary() -> dict[str, Any]:
+    doc_dir = ROOT / "doc"
+    if not doc_dir.exists():
+        return {}
+    for path in sorted(doc_dir.glob(f"*/{S2_BASELINE_SUMMARY_NAME}"), reverse=True):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        summary = payload.get("summary")
+        if isinstance(summary, dict):
+            return {"path": str(path.relative_to(ROOT)), "payload": payload, "summary": summary}
+    return {}
 
 
 def s2_source_summary_frame(summary: dict[str, object]) -> pd.DataFrame:
@@ -795,6 +812,21 @@ with st.sidebar:
         with st.expander("최신화 실행 로그", expanded=False):
             st.code(ui_safe_refresh_log(st.session_state["s2_refresh_output"]))
 
+    repo_baseline = repo_s2_baseline_summary()
+    if repo_baseline:
+        payload = repo_baseline["payload"]
+        summary = repo_baseline["summary"]
+        baseline_cols = st.columns(2)
+        baseline_cols[0].metric("Repo S2 기준 행", f"{safe_int(payload.get('s2_lookup_rows')):,}")
+        baseline_cols[1].metric("Repo S2 원천 행", f"{safe_int(payload.get('cache_rows_after')):,}")
+        st.caption(
+            "Repo 기준은 앱 배포 시 기본으로 읽는 S2 데이터입니다. "
+            "최신화 기록은 이 서버에서 버튼을 누른 실행 로그입니다."
+        )
+        with st.expander("Repo S2 기준 요약", expanded=False):
+            st.dataframe(s2_source_summary_frame(summary), use_container_width=True, height=220)
+            st.caption(f"요약 파일: {repo_baseline['path']}")
+
     recent_history = history_frame(5)
     if not recent_history.empty:
         latest = recent_history.iloc[0]
@@ -811,6 +843,8 @@ with st.sidebar:
         if not change_detail.empty:
             with st.expander("최근 S2 변경 이력 상세", expanded=False):
                 st.dataframe(change_detail, use_container_width=True, height=260)
+    else:
+        st.caption("이 서버에서 실행한 S2 최신화 기록은 아직 없습니다.")
 
 
 st.caption("정산서 업로드 -> S2 판매채널명 확인 -> S2 매핑 -> 다운로드")
