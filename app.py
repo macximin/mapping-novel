@@ -60,6 +60,22 @@ S2_REMEMBER_ID_KEY = "s2_remember_id"
 S2_ID_MEMORY_COMPONENT_KEY = "s2_id_memory"
 S2_ID_MEMORY_CLEAR_COUNTER_KEY = "s2_id_memory_clear_counter"
 S2_ID_MEMORY_STORAGE_KEY = "mapping_novel_s2_id"
+S2_CHANNEL_SCHEMA_EXAMPLES = (
+    "네이버_장르(광고수익)",
+    "네이버_장르",
+    "네이버_일반",
+    "카카오페이지(소설)",
+    "카카오페이지(선투자)",
+    "블라이스_인앱결제",
+    "블라이스_일반결제",
+)
+S2_CHANNEL_FILENAME_GUIDE = (
+    "{S2정산플랫폼} 정보가 반드시 필요합니다. "
+    "파일명에 S2에서 사용하는 판매채널명을 넣어 주세요. "
+    f"예: {', '.join(S2_CHANNEL_SCHEMA_EXAMPLES)}. "
+    "전체 목록은 아래 '판매채널명 스키마'를 펼쳐 확인하세요. "
+    "예를 들어 '카카오 정산상세.xlsx'는 S2 스키마와 일치하지 않는 고맥락 워딩이라 사용할 수 없습니다."
+)
 
 
 S2_ID_MEMORY_COMPONENT = (
@@ -477,10 +493,7 @@ def process_settlement_batch_item(
     try:
         if not s2_channel or not effective_platform:
             result["status"] = "blocked"
-            result["error"] = (
-                "파일명에서 S2 판매채널명을 찾지 못했습니다. "
-                "파일명에 실제 S2 판매채널명을 넣거나 드롭다운에서 직접 선택하세요. 예: 카카오페이지(소설)"
-            )
+            result["error"] = S2_CHANNEL_FILENAME_GUIDE
             return result
         if hasattr(settlement_file, "seek"):
             settlement_file.seek(0)
@@ -902,15 +915,15 @@ if settlement_files:
     else:
         st.warning(
             f"S2 판매채널명을 감지하지 못한 파일 {len(undetected_files):,}개가 있습니다. "
-            "파일명에 실제 S2 판매채널명을 넣거나 드롭다운에서 직접 선택하세요. 예: 카카오페이지(소설)"
+            + S2_CHANNEL_FILENAME_GUIDE
         )
     with st.expander("파일별 판매채널", expanded=bool(undetected_files)):
         st.dataframe(pd.DataFrame(platform_rows), use_container_width=True, height=min(180, 40 + 28 * len(platform_rows)))
 else:
-    st.caption("파일명에 실제 S2 판매채널명을 넣거나, 드롭다운에서 직접 선택하세요. 예: 카카오페이지(소설), 구글(소설), 네이버_장르")
+    st.caption(S2_CHANNEL_FILENAME_GUIDE)
 
 with st.expander("판매채널명 스키마", expanded=False):
-    st.caption("파일명 안에 아래 S2 판매채널명 중 하나가 들어 있으면 자동감지됩니다.")
+    st.caption("{S2정산플랫폼}에 넣을 수 있는 전체 목록입니다. 파일명 안에 아래 문자열 중 하나가 들어 있으면 자동감지됩니다.")
     st.dataframe(s2_channel_schema_frame(), use_container_width=True, height=260)
 
 
