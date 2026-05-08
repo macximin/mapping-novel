@@ -542,7 +542,7 @@ def inject_compact_layout_css() -> None:
         """
         <style>
         .block-container {
-            padding-top: 1.55rem;
+            padding-top: 3.4rem !important;
             padding-bottom: 1.25rem;
         }
         .app-title {
@@ -666,6 +666,7 @@ with st.sidebar:
         f"전체 교체 방식으로 고정합니다. 조회 범위는 "
         f"{S2_REFRESH_START_DATE.isoformat()}부터 오늘까지, 콘텐츠형태는 소설입니다."
     )
+    st.warning("영구저장이 아니라, 서버에 임시 저장됩니다.")
 
     current_cache = cache_metrics(S2_SOURCE_LOOKUP)
     cache_cols = st.columns(2)
