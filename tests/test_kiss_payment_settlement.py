@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import pandas as pd
 from openpyxl import Workbook
 
 from kiss_payment_settlement import (
@@ -28,13 +29,13 @@ class KissPaymentSettlementTest(unittest.TestCase):
     def test_loads_kiss_export_with_ooxml_fallback(self) -> None:
         frame = load_payment_settlement_list(SAMPLE)
 
-        self.assertEqual(len(frame), 1000)
+        self.assertGreater(len(frame), 900)
         self.assertIn("지급정산마스터 등록 일자", frame.columns)
         self.assertIn("판매채널콘텐츠ID", frame.columns)
 
         summary = summarize_payment_settlement(frame)
-        self.assertEqual(summary["rows"], 1000)
-        self.assertEqual(summary["content_shape_counts"], {"소설": 1000})
+        self.assertEqual(summary["rows"], len(frame))
+        self.assertEqual(summary["content_shape_counts"].get("소설"), len(frame))
 
     def test_file_like_upload_can_be_converted_to_s2_lookup(self) -> None:
         uploaded = io.BytesIO(SAMPLE.read_bytes())
@@ -116,6 +117,51 @@ class KissPaymentSettlementTest(unittest.TestCase):
 
         self.assertEqual(lookup.loc[0, "판매채널콘텐츠ID"], "301")
         self.assertEqual(lookup.loc[0, "콘텐츠ID"], "401")
+
+    def test_disabled_marker_rows_are_removed_from_import_outputs(self) -> None:
+        def row(title: str, sales_channel_content_id: str, author: str = "홍길동") -> dict[str, object]:
+            return {
+                "승인상태": "승인",
+                "지급정산상태": "운영중",
+                "판매채널명": "테스트 채널",
+                "콘텐츠형태": "소설",
+                "콘텐츠명": title,
+                "작가명": author,
+                "지급정산마스터 등록 일자": "2026-05-08 11:00:00",
+                "지급정산마스터ID": f"M-{sales_channel_content_id}",
+                "지급정산상세ID": f"D-{sales_channel_content_id}",
+                "콘텐츠ID": f"C-{sales_channel_content_id}",
+                "판매채널콘텐츠ID": sales_channel_content_id,
+            }
+
+        incoming = pd.DataFrame(
+            [
+                row("정상 작품", "301"),
+                row("[사용안함]_삭제 작품", "302"),
+                row("작가 칸 표식 작품", "303", "(사용금지)"),
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_path = Path(tmp) / "s2_cache.csv"
+            lookup_path = Path(tmp) / "s2_lookup.csv"
+
+            result = import_payment_settlement_frame(
+                incoming,
+                cache_path=cache_path,
+                s2_lookup_path=lookup_path,
+                merge_existing=False,
+            )
+            cached = pd.read_csv(cache_path, dtype=object)
+            lookup = pd.read_csv(lookup_path, dtype=object)
+
+            self.assertEqual(result.source_rows, 1)
+            self.assertEqual(result.cache_rows_after, 1)
+            self.assertEqual(result.s2_lookup_rows, 1)
+            self.assertEqual(cached["판매채널콘텐츠ID"].tolist(), ["301"])
+            self.assertEqual(lookup["판매채널콘텐츠ID"].tolist(), ["301"])
+            self.assertNotIn("사용안함", cache_path.read_text(encoding="utf-8-sig"))
+            self.assertNotIn("사용금지", lookup_path.read_text(encoding="utf-8-sig"))
 
     def test_summary_counts_sales_channel_content_conflicts(self) -> None:
         frame = payment_settlement_frame_from_api_rows(

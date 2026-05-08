@@ -56,6 +56,7 @@ MATCH_NONE = "no_match"
 MATCH_AMBIGUOUS = "ambiguous"
 MATCH_BLANK = "blank_key"
 MATCH_SKIPPED = "skipped"
+DISABLED_ROW_MARKERS = ("[사용안함]", "(사용안함)", "[사용금지]", "(사용금지)")
 
 
 @dataclass
@@ -76,6 +77,28 @@ def text(value: Any) -> str:
     except (TypeError, ValueError):
         pass
     return str(value).strip()
+
+
+def has_disabled_row_marker(value: Any) -> bool:
+    normalized = unicodedata.normalize("NFKC", text(value))
+    return any(marker in normalized for marker in DISABLED_ROW_MARKERS)
+
+
+def disabled_row_mask(frame: pd.DataFrame, columns: Iterable[Any] | None = None) -> pd.Series:
+    if columns is None:
+        selected_columns = list(frame.columns)
+    else:
+        selected_columns = [column for column in columns if column in frame.columns]
+    mask = pd.Series(False, index=frame.index)
+    for column in selected_columns:
+        mask = mask | frame[column].map(has_disabled_row_marker)
+    return mask
+
+
+def drop_disabled_rows(frame: pd.DataFrame, columns: Iterable[Any] | None = None) -> pd.DataFrame:
+    if frame.empty:
+        return frame.copy().reset_index(drop=True)
+    return frame.loc[~disabled_row_mask(frame, columns=columns)].reset_index(drop=True)
 
 
 def clean_title(txt: Any) -> str:
@@ -304,6 +327,9 @@ def build_mapping(
     settlement_df: pd.DataFrame,
     master_df: pd.DataFrame | None = None,
 ) -> MappingResult:
+    s2_df = drop_disabled_rows(s2_df)
+    master_df = drop_disabled_rows(master_df) if master_df is not None else None
+
     s2_title_col = pick_column(S2_TITLE_COL_CAND, s2_df, "S2 콘텐츠명")
     s2_id_col = pick_column(S2_ID_COL_CAND, s2_df, "S2 판매채널콘텐츠ID")
     settlement_title_col = pick_column(SETTLEMENT_TITLE_COL_CAND, settlement_df, "정산서 상품명")

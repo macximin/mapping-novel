@@ -15,7 +15,7 @@ import streamlit as st
 
 from kiss_refresh_history import latest_refresh_runs, latest_s2_refresh_changes
 from kiss_payment_settlement import load_payment_settlement_list, summarize_payment_settlement, to_s2_lookup
-from mapping_core import build_mapping, export_mapping, load_master, read_first_sheet, text
+from mapping_core import build_mapping, drop_disabled_rows, export_mapping, load_master, read_first_sheet, text
 from settlement_adapters import (
     adapter_audit_dataframe,
     adapter_blocking_messages,
@@ -250,7 +250,7 @@ def load_manual_s2_reference(uploaded_file: object) -> tuple[pd.DataFrame, str, 
     except Exception:
         if hasattr(uploaded_file, "seek"):
             uploaded_file.seek(0)
-        return read_first_sheet(uploaded_file), "수동 S2 기준 리스트", None
+        return drop_disabled_rows(read_first_sheet(uploaded_file)), "수동 S2 기준 리스트", None
 
 
 def history_frame(limit: int = 10) -> pd.DataFrame:
@@ -402,7 +402,7 @@ def load_selected_s2_basis(
         payment_df = load_payment_settlement_list(payment_settlement_file)
         return to_s2_lookup(payment_df), "수동 S2 원천 엑셀", summarize_payment_settlement(payment_df)
     if use_payment_cache:
-        return pd.read_csv(S2_SOURCE_LOOKUP, dtype=object), "로컬 S2 기준", None
+        return drop_disabled_rows(pd.read_csv(S2_SOURCE_LOOKUP, dtype=object)), "로컬 S2 기준", None
     s2_df, s2_source_label, payment_summary = load_manual_s2_reference(s2_file)
     return s2_df, s2_source_label, payment_summary
 

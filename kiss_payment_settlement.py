@@ -11,7 +11,7 @@ from xml.etree import ElementTree as ET
 
 import pandas as pd
 
-from mapping_core import extract_master_work_title, text
+from mapping_core import drop_disabled_rows, extract_master_work_title, text
 
 
 OOXML_NS = {
@@ -92,7 +92,7 @@ def _prepare_payment_settlement_frame(frame: pd.DataFrame) -> pd.DataFrame:
     for column in DATE_COLUMNS:
         if column in frame.columns:
             frame[column] = frame[column].map(normalize_excel_date)
-    return frame
+    return drop_disabled_rows(frame)
 
 
 def _read_first_sheet(source: str | Path | BinaryIO) -> pd.DataFrame:
@@ -153,7 +153,7 @@ def validate_payment_settlement_columns(frame: pd.DataFrame) -> None:
 
 def to_s2_lookup(frame: pd.DataFrame) -> pd.DataFrame:
     validate_payment_settlement_columns(frame)
-    working = frame.copy()
+    working = drop_disabled_rows(frame)
     working["판매채널콘텐츠ID"] = working["판매채널콘텐츠ID"].map(_id_text)
     working = working[working["판매채널콘텐츠ID"].ne("")].copy()
     if "지급정산마스터 등록 일자" in working.columns:
@@ -180,6 +180,7 @@ def to_s2_lookup(frame: pd.DataFrame) -> pd.DataFrame:
 
 def summarize_payment_settlement(frame: pd.DataFrame) -> dict[str, Any]:
     validate_payment_settlement_columns(frame)
+    frame = drop_disabled_rows(frame)
     dates = frame.get("지급정산마스터 등록 일자", pd.Series(dtype=object)).map(text)
     nonblank_dates = dates[dates.ne("")]
     sale_channel_ids = frame["판매채널콘텐츠ID"].map(_id_text)
@@ -204,7 +205,7 @@ def summarize_payment_settlement(frame: pd.DataFrame) -> dict[str, Any]:
 
 def sales_channel_content_conflict_counts(frame: pd.DataFrame) -> dict[str, int]:
     validate_payment_settlement_columns(frame)
-    working = frame.copy()
+    working = drop_disabled_rows(frame)
     working["_판매채널콘텐츠ID"] = working["판매채널콘텐츠ID"].map(_id_text)
     working = working[working["_판매채널콘텐츠ID"].ne("")].copy()
     if working.empty:
@@ -365,7 +366,7 @@ def _s2_audit_snapshot(frame: pd.DataFrame | None) -> pd.DataFrame:
     if frame is None or frame.empty:
         return pd.DataFrame(columns=S2_AUDIT_COLUMNS).rename_axis("판매채널콘텐츠ID")
 
-    working = _normalize_frame(frame.copy())
+    working = drop_disabled_rows(_normalize_frame(frame.copy()))
     if "판매채널콘텐츠ID" not in working.columns:
         return pd.DataFrame(columns=S2_AUDIT_COLUMNS).rename_axis("판매채널콘텐츠ID")
 

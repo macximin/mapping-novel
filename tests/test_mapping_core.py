@@ -10,6 +10,7 @@ from mapping_core import (
     MATCH_OK,
     build_mapping,
     clean_master_title,
+    drop_disabled_rows,
     extract_master_work_title,
 )
 
@@ -66,6 +67,36 @@ class MappingCoreTest(unittest.TestCase):
         self.assertEqual(rows.loc[0, "IPS_매칭상태"], MATCH_NONE)
         self.assertEqual(rows.loc[0, "IPS_콘텐츠ID"], "")
         self.assertEqual(rows.loc[0, "검토필요(Y/N)"], "Y")
+
+    def test_disabled_marker_rows_are_not_used_as_reference_candidates(self) -> None:
+        s2 = pd.DataFrame(
+            {
+                "콘텐츠명": ["정상 작품", "[사용안함]_삭제 작품"],
+                "판매채널콘텐츠ID": ["S2-1", "S2-2"],
+                "콘텐츠ID": ["CID-1", "CID-2"],
+            }
+        )
+        settlement = pd.DataFrame({"작품명": ["삭제 작품", "정상 작품"]})
+
+        rows = build_mapping(s2, settlement, None).rows
+
+        self.assertEqual(rows.loc[0, "S2_매칭상태"], MATCH_NONE)
+        self.assertEqual(rows.loc[0, "S2_판매채널콘텐츠ID"], "")
+        self.assertEqual(rows.loc[1, "S2_매칭상태"], MATCH_OK)
+        self.assertEqual(rows.loc[1, "S2_판매채널콘텐츠ID"], "S2-1")
+
+    def test_drop_disabled_rows_checks_all_reference_cells(self) -> None:
+        frame = pd.DataFrame(
+            {
+                "콘텐츠명": ["정상 작품", "삭제 작품", "다른 삭제 작품"],
+                "메모": ["", "(사용금지)", ""],
+                "상태": ["", "", "[사용안함]"],
+            }
+        )
+
+        filtered = drop_disabled_rows(frame)
+
+        self.assertEqual(filtered["콘텐츠명"].tolist(), ["정상 작품"])
 
     def test_ambiguous_master_key_blocks_auto_id_selection(self) -> None:
         s2 = pd.DataFrame({"콘텐츠명": ["그 남자의 비밀"], "판매채널콘텐츠ID": ["S2-1"]})
