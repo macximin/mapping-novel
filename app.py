@@ -79,6 +79,7 @@ S2_ID_MEMORY_COMPONENT_KEY = "s2_id_memory"
 S2_ID_MEMORY_CLEAR_COUNTER_KEY = "s2_id_memory_clear_counter"
 S2_ID_MEMORY_STORAGE_KEY = "mapping_novel_s2_id"
 SETTLEMENT_UPLOAD_RESET_COUNTER_KEY = "settlement_upload_reset_counter"
+MAPPING_RESULT_STATE_KEY = "mapping_result_state"
 S2_CHANNEL_SCHEMA_EXAMPLES = (
     "네이버_장르(광고수익)",
     "네이버_장르",
@@ -712,6 +713,69 @@ def guarded_s2_source_label(source_label: str, guards: S2ReferenceGuards, guard_
     return f"{source_label} ({', '.join(parts)})" if parts else source_label
 
 
+def uploaded_file_token(uploaded_file: object | None) -> dict[str, object] | None:
+    if uploaded_file is None:
+        return None
+    return {
+        "name": text(getattr(uploaded_file, "name", "")),
+        "size": safe_int(getattr(uploaded_file, "size", 0)),
+    }
+
+
+def mapping_run_signature(
+    *,
+    settlement_files: list[object],
+    selected_s2_channel: str,
+    use_payment_cache: bool,
+    payment_settlement_file: object | None,
+    s2_file: object | None,
+    single_output_name: str,
+) -> str:
+    payload = {
+        "settlement_files": [uploaded_file_token(file) for file in settlement_files],
+        "selected_s2_channel": selected_s2_channel,
+        "use_payment_cache": use_payment_cache,
+        "payment_settlement_file": uploaded_file_token(payment_settlement_file),
+        "s2_file": uploaded_file_token(s2_file),
+        "single_output_name": text(single_output_name),
+    }
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True)
+
+
+def s2_id_nonblank_count(frame: pd.DataFrame) -> int:
+    if "판매채널콘텐츠ID" not in frame.columns:
+        return 0
+    return int(frame["판매채널콘텐츠ID"].map(str).str.strip().ne("").sum())
+
+
+def build_mapping_session_state(
+    *,
+    signature: str,
+    results: list[dict[str, Any]],
+    s2_df: pd.DataFrame,
+    s2_source_label: str,
+    payment_summary: dict[str, object] | None,
+) -> dict[str, Any]:
+    summary_frame = batch_summary_frame(results)
+    work_order_frame = build_pd_work_order_report_frame(results)
+    combined_report_frame = build_combined_mapping_report_frame(results)
+    zip_name = f"mapping_results_{datetime.now().strftime('%Y%m%d_%H%M')}.zip"
+    return {
+        "signature": signature,
+        "s2_source_label": s2_source_label,
+        "s2_rows": len(s2_df),
+        "s2_id_rows": s2_id_nonblank_count(s2_df),
+        "payment_summary": payment_summary,
+        "summary_frame": summary_frame,
+        "work_order_csv_bytes": work_order_frame.to_csv(index=False).encode("utf-8-sig"),
+        "combined_csv_bytes": combined_report_frame.to_csv(index=False).encode("utf-8-sig"),
+        "work_order_empty": work_order_frame.empty,
+        "combined_report_empty": combined_report_frame.empty,
+        "zip_name": zip_name,
+        "zip_bytes": build_batch_zip(results, summary_frame, work_order_frame, combined_report_frame),
+    }
+
+
 def process_settlement_batch_item(
     *,
     settlement_file: object,
@@ -1313,6 +1377,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 if reset_upload_clicked:
+    st.session_state.pop(MAPPING_RESULT_STATE_KEY, None)
     st.session_state[SETTLEMENT_UPLOAD_RESET_COUNTER_KEY] = safe_int(
         st.session_state.get(SETTLEMENT_UPLOAD_RESET_COUNTER_KEY)
     ) + 1
@@ -1428,66 +1493,82 @@ st.dataframe(
 if not can_run:
     st.caption("실행하려면 준비 상태의 `필요` 또는 `확인 필요` 항목을 먼저 처리하세요.")
 
+run_signature = mapping_run_signature(
+    settlement_files=settlement_files,
+    selected_s2_channel=selected_s2_channel,
+    use_payment_cache=use_payment_cache,
+    payment_settlement_file=payment_settlement_file,
+    s2_file=s2_file,
+    single_output_name=single_output_name,
+)
 run_clicked = st.button("어댑터 정규화 및 S2 매핑 실행", type="primary", disabled=not can_run)
-if not run_clicked:
-    st.stop()
 
-try:
-    results: list[dict[str, Any]] = []
-    progress_slot = st.empty()
-    with st.spinner("S2 기준과 정산서 엑셀을 처리하는 중..."):
-        progress_slot.caption("S2 기준 불러오는 중")
-        s2_df, s2_source_label, payment_summary, s2_guards, s2_guard_filter = load_selected_s2_basis(
-            use_payment_cache=use_payment_cache,
-            payment_settlement_file=payment_settlement_file,
-            s2_file=s2_file,
-        )
-
-        for idx, settlement_file in enumerate(settlement_files, start=1):
-            progress_slot.caption(f"{idx:,}/{len(settlement_files):,} 처리 중: {settlement_file.name}")
-            if len(settlement_files) == 1:
-                raw_output_stem = single_output_name or default_mapping_stem(settlement_file)
-            else:
-                raw_output_stem = default_mapping_stem(settlement_file)
-            output_stem = sanitize_output_stem(raw_output_stem) or default_mapping_stem(settlement_file)
-            results.append(
-                process_settlement_batch_item(
-                    settlement_file=settlement_file,
-                    selected_s2_channel=selected_s2_channel,
-                    s2_df=s2_df,
-                    s2_guards=s2_guards,
-                    s2_guard_filter=s2_guard_filter,
-                    master_df=master_df,
-                    output_stem=output_stem,
-                )
+if run_clicked:
+    try:
+        results: list[dict[str, Any]] = []
+        progress_slot = st.empty()
+        with st.spinner("S2 기준과 정산서 엑셀을 처리하는 중..."):
+            progress_slot.caption("S2 기준 불러오는 중")
+            s2_df, s2_source_label, payment_summary, s2_guards, s2_guard_filter = load_selected_s2_basis(
+                use_payment_cache=use_payment_cache,
+                payment_settlement_file=payment_settlement_file,
+                s2_file=s2_file,
             )
-    progress_slot.empty()
-except Exception as exc:
-    if "progress_slot" in locals():
+
+            for idx, settlement_file in enumerate(settlement_files, start=1):
+                progress_slot.caption(f"{idx:,}/{len(settlement_files):,} 처리 중: {settlement_file.name}")
+                if len(settlement_files) == 1:
+                    raw_output_stem = single_output_name or default_mapping_stem(settlement_file)
+                else:
+                    raw_output_stem = default_mapping_stem(settlement_file)
+                output_stem = sanitize_output_stem(raw_output_stem) or default_mapping_stem(settlement_file)
+                results.append(
+                    process_settlement_batch_item(
+                        settlement_file=settlement_file,
+                        selected_s2_channel=selected_s2_channel,
+                        s2_df=s2_df,
+                        s2_guards=s2_guards,
+                        s2_guard_filter=s2_guard_filter,
+                        master_df=master_df,
+                        output_stem=output_stem,
+                    )
+                )
         progress_slot.empty()
-    st.error("S2 기준 또는 입력 파일을 처리하지 못했습니다.")
-    render_error_detail(exc)
+        st.session_state[MAPPING_RESULT_STATE_KEY] = build_mapping_session_state(
+            signature=run_signature,
+            results=results,
+            s2_df=s2_df,
+            s2_source_label=s2_source_label,
+            payment_summary=payment_summary,
+        )
+    except Exception as exc:
+        if "progress_slot" in locals():
+            progress_slot.empty()
+        st.error("S2 기준 또는 입력 파일을 처리하지 못했습니다.")
+        render_error_detail(exc)
+        st.stop()
+
+mapping_state = st.session_state.get(MAPPING_RESULT_STATE_KEY)
+if not mapping_state or mapping_state.get("signature") != run_signature:
     st.stop()
 
 
 st.subheader("S2 기준")
 s2_cols = st.columns(3)
-s2_cols[0].metric("소스", s2_source_label)
-s2_cols[1].metric("S2 기준 행", f"{len(s2_df):,}")
-if "판매채널콘텐츠ID" in s2_df.columns:
-    s2_cols[2].metric("판매채널콘텐츠ID", f"{s2_df['판매채널콘텐츠ID'].map(str).str.strip().ne('').sum():,}")
+s2_cols[0].metric("소스", mapping_state.get("s2_source_label", ""))
+s2_cols[1].metric("S2 기준 행", f"{safe_int(mapping_state.get('s2_rows')):,}")
+s2_cols[2].metric("판매채널콘텐츠ID", f"{safe_int(mapping_state.get('s2_id_rows')):,}")
+payment_summary = mapping_state.get("payment_summary")
 if payment_summary is not None:
     with st.expander("수동 S2 원천 요약", expanded=False):
         st.dataframe(s2_source_summary_frame(payment_summary), use_container_width=True, height=260)
 
 
 st.subheader("처리 결과")
-summary_frame = batch_summary_frame(results)
-work_order_frame = build_pd_work_order_report_frame(results)
-combined_report_frame = build_combined_mapping_report_frame(results)
+summary_frame = mapping_state["summary_frame"]
 status_counts = summary_frame["상태"].value_counts().to_dict() if not summary_frame.empty else {}
 batch_cols = st.columns(4)
-batch_cols[0].metric("전체 파일", f"{len(results):,}")
+batch_cols[0].metric("전체 파일", f"{len(summary_frame):,}")
 batch_cols[1].metric("성공", f"{safe_int(status_counts.get('success')):,}")
 batch_cols[2].metric("차단", f"{safe_int(status_counts.get('blocked')):,}")
 batch_cols[3].metric("실패", f"{safe_int(status_counts.get('failed')):,}")
@@ -1497,25 +1578,24 @@ report_download_cols = st.columns(2)
 with report_download_cols[0]:
     st.download_button(
         "PD 작업지시 CSV 다운로드",
-        work_order_frame.to_csv(index=False).encode("utf-8-sig"),
+        mapping_state["work_order_csv_bytes"],
         file_name="PD_작업지시_종합리포트.csv",
         mime="text/csv",
-        disabled=work_order_frame.empty,
+        disabled=bool(mapping_state.get("work_order_empty")),
     )
 with report_download_cols[1]:
     st.download_button(
         "전체 행별매핑 CSV 다운로드",
-        combined_report_frame.to_csv(index=False).encode("utf-8-sig"),
+        mapping_state["combined_csv_bytes"],
         file_name="전체_행별매핑_종합.csv",
         mime="text/csv",
-        disabled=combined_report_frame.empty,
+        disabled=bool(mapping_state.get("combined_report_empty")),
     )
 
-zip_name = f"mapping_results_{datetime.now().strftime('%Y%m%d_%H%M')}.zip"
 st.download_button(
     "전체 결과 ZIP 다운로드",
-    build_batch_zip(results, summary_frame, work_order_frame, combined_report_frame),
-    file_name=zip_name,
+    mapping_state["zip_bytes"],
+    file_name=mapping_state["zip_name"],
     mime="application/zip",
-    disabled=not results,
+    disabled=summary_frame.empty,
 )
