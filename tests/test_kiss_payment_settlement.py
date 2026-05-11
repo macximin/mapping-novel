@@ -10,6 +10,7 @@ from openpyxl import Workbook
 
 from kiss_payment_settlement import (
     cache_part_paths,
+    import_payment_settlement_lookup_only,
     import_payment_settlement_frame,
     load_payment_settlement_cache,
     load_payment_settlement_list,
@@ -337,6 +338,35 @@ class KissPaymentSettlementTest(unittest.TestCase):
             self.assertEqual(result.cache_rows_after, 1)
             self.assertEqual(cache_path.read_text(encoding="utf-8-sig").count("오래된 제목"), 0)
             self.assertIn("새 제목", lookup_path.read_text(encoding="utf-8-sig"))
+
+    def test_lookup_only_refresh_writes_compact_lookup_without_source_cache(self) -> None:
+        incoming = payment_settlement_frame_from_api_rows(
+            [
+                {
+                    "pymtSetlId": "102",
+                    "pymtSetlDtlId": "202",
+                    "schnCtnsId": "301",
+                    "ctnsId": "401",
+                    "ctnsNm": "새 제목",
+                    "schnNm": "테스트 채널",
+                    "ctnsStleCdNm": "소설",
+                    "cnfmStsCdNm": "승인",
+                    "pymtSetlStsCdNm": "운영중",
+                    "cretDtm": "2026-05-08 11:00:00",
+                }
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            lookup_path = Path(tmp) / "s2_lookup.csv"
+            result = import_payment_settlement_lookup_only(incoming, s2_lookup_path=lookup_path)
+            lookup = pd.read_csv(lookup_path, dtype=object)
+
+            self.assertEqual(result.cache_rows_after, 1)
+            self.assertEqual(result.output_cache_parts, ())
+            self.assertEqual(result.s2_lookup_rows, 1)
+            self.assertEqual(result.summary["cache_mode"], "lookup_only")
+            self.assertEqual(lookup["판매채널콘텐츠ID"].tolist(), ["301"])
 
 
 if __name__ == "__main__":

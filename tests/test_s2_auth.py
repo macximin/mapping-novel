@@ -7,6 +7,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from s2_auth import (
+    S2_PASSWORD_KEYS,
+    S2_USERNAME_KEYS,
     apply_env_file,
     has_s2_credentials,
     looks_like_s2_auth_failure,
@@ -19,7 +21,11 @@ from scripts import refresh_kiss_payment_settlement as refresh_script
 
 class S2AuthTest(unittest.TestCase):
     def test_login_values_require_id_and_password(self) -> None:
-        self.assertEqual(normalize_s2_login_values(" user ", " password "), {"S2_ID": "user", "S2_PW": "password"})
+        values = normalize_s2_login_values(" user ", " password ")
+        for key in S2_USERNAME_KEYS:
+            self.assertEqual(values[key], "user")
+        for key in S2_PASSWORD_KEYS:
+            self.assertEqual(values[key], "password")
         self.assertEqual(normalize_s2_login_values("user", ""), {})
         self.assertEqual(normalize_s2_login_values("", "password"), {})
 
@@ -35,6 +41,8 @@ class S2AuthTest(unittest.TestCase):
         self.assertTrue(has_s2_credentials(values))
         self.assertEqual(values["S2_ID"], "cloud-user")
         self.assertEqual(values["S2_PW"], "cloud-password")
+        self.assertEqual(values["KLD_LOGIN_ID"], "cloud-user")
+        self.assertEqual(values["KLD_LOGIN_PW"], "cloud-password")
         self.assertEqual(values["S2_API_BASE_URL"], "https://s2.example.test")
 
     def test_streamlit_root_access_token_is_credential(self) -> None:
@@ -63,6 +71,8 @@ class S2AuthTest(unittest.TestCase):
         self.assertTrue(has_s2_credentials(values))
         self.assertEqual(values["S2_ID"], "section-user")
         self.assertEqual(values["S2_PW"], "section-password")
+        self.assertEqual(values["KLD_LOGIN_ID"], "section-user")
+        self.assertEqual(values["KLD_LOGIN_PW"], "section-password")
         self.assertEqual(values["S2_API_BASE_URL"], "https://section.example.test")
 
     def test_streamlit_section_token_alias_is_credential(self) -> None:

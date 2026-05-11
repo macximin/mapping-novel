@@ -17,8 +17,10 @@ if str(ROOT) not in sys.path:
 from kiss_refresh_history import now_iso, record_refresh_run, record_s2_refresh_changes
 from kiss_refresh_lock import refresh_lock
 from kiss_payment_settlement import (
+    import_payment_settlement_lookup_only,
     import_payment_settlement_frame,
     payment_settlement_frame_from_api_rows,
+    payment_settlement_minimal_frame_from_api_rows,
     save_summary,
 )
 from s2_auth import (
@@ -32,7 +34,7 @@ from s2_auth import (
 )
 
 
-DEFAULT_PAGE_SIZE = 1000
+DEFAULT_PAGE_SIZE = 50_000
 KISS_API_BASE_URL = "https://kiss-api.kld.kr"
 KISS_COMPANY_CODE = "1000"
 DEFAULT_CONTENT_STYLE_CODE = ""  # blank means no S2 content-shape filter
@@ -77,12 +79,16 @@ def main() -> None:
                 limit_pages=max(0, args.limit_pages),
                 content_style_code=args.content_style_code,
             )
-            frame = payment_settlement_frame_from_api_rows(rows)
-            result = import_payment_settlement_frame(
-                frame,
-                cache_path=args.cache,
-                s2_lookup_path=args.s2_lookup,
-            )
+            if args.lookup_only:
+                frame = payment_settlement_minimal_frame_from_api_rows(rows)
+                result = import_payment_settlement_lookup_only(frame, s2_lookup_path=args.s2_lookup)
+            else:
+                frame = payment_settlement_frame_from_api_rows(rows)
+                result = import_payment_settlement_frame(
+                    frame,
+                    cache_path=args.cache,
+                    s2_lookup_path=args.s2_lookup,
+                )
             save_summary(summary_path, result)
         history_id = record_refresh_run(
             args.history_db,
@@ -121,7 +127,7 @@ def main() -> None:
         print(f"api_total_rows={total_rows}")
         print(f"fetched_rows={len(rows)}")
         print(f"fetched_pages={fetched_pages}")
-        print("local_s2_policy=replace")
+        print(f"local_s2_policy={'lookup_only_replace' if args.lookup_only else 'replace'}")
         print(f"cache_rows_before={result.cache_rows_before}")
         print(f"cache_rows_after={result.cache_rows_after}")
         print(f"s2_lookup_rows={result.s2_lookup_rows}")
@@ -167,6 +173,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--content-style-code", default=DEFAULT_CONTENT_STYLE_CODE, help="S2 ctnsStleCd. Blank fetches every content shape.")
     parser.add_argument("--cache", default=str(ROOT / "data" / "kiss_payment_settlement_cache.csv"))
     parser.add_argument("--s2-lookup", default=str(ROOT / "data" / "kiss_payment_settlement_s2_lookup.csv"))
+    parser.add_argument("--lookup-only", action="store_true", help="Write only the compact S2 lookup CSV and skip raw source cache parts.")
     parser.add_argument("--summary", default="")
     parser.add_argument("--history-db", default=str(ROOT / "data" / "kiss_refresh_history.sqlite"))
     parser.add_argument("--lock-dir", default=str(ROOT / "data" / "s2_refresh.lock"))

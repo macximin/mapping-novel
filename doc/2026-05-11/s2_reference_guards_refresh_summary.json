@@ -1,0 +1,12 @@
+{
+  "created_at": "2026-05-11",
+  "content_style_code": "102",
+  "missing_rows_raw": 2327,
+  "missing_lookup_rows": 2327,
+  "billing_api_total_rows": 868,
+  "billing_rows_raw": 868,
+  "billing_pages": 1,
+  "billing_lookup_rows": 868,
+  "missing_lookup": "C:\\Users\\wjjo\\Desktop\\mapping-novel\\data\\s2_payment_missing_lookup.csv",
+  "billing_lookup": "C:\\Users\\wjjo\\Desktop\\mapping-novel\\data\\s2_billing_settlement_lookup.csv"
+}

@@ -75,6 +75,16 @@ class MatchingRulesTest(unittest.TestCase):
         assert detection is not None
         self.assertEqual(detection.sales_channel, "네이버_장르(광고수익)")
 
+    def test_detects_explicit_ssot_segment_before_longer_later_tokens(self) -> None:
+        detection = detect_s2_sales_channel(
+            "2026-02__토스(소설)__토스(구루컴퍼니)__2026년 2월 토스 정산상세.xlsx"
+        )
+
+        self.assertIsNotNone(detection)
+        assert detection is not None
+        self.assertEqual(detection.sales_channel, "토스(소설)")
+        self.assertEqual(detection.platform, "토스(구루컴퍼니)")
+
     def test_filters_s2_rows_by_exact_sales_channel(self) -> None:
         s2 = pd.DataFrame(
             {

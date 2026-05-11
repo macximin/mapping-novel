@@ -33,6 +33,13 @@ from settlement_adapters import (
     summarize_normalization,
 )
 from s2_transfer import build_s2_transfer, export_s2_transfer
+from s2_reference_guards import (
+    S2GuardFilterResult,
+    S2ReferenceGuards,
+    annotate_mapping_result,
+    apply_missing_exclusions,
+    load_s2_reference_guards,
+)
 from s2_auth import (
     S2_AUTH_ERROR_MESSAGE,
     S2_AUTH_FAILURE_HINT,
@@ -48,11 +55,16 @@ ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / "data"
 KIDARI_NOVEL_MASTER = DATA_DIR / "kidari_contents.xlsx"
 S2_SOURCE_LOOKUP = DATA_DIR / "kiss_payment_settlement_s2_lookup.csv"
+S2_MISSING_LOOKUP = DATA_DIR / "s2_payment_missing_lookup.csv"
+S2_BILLING_LOOKUP = DATA_DIR / "s2_billing_settlement_lookup.csv"
 S2_HISTORY_DB = DATA_DIR / "kiss_refresh_history.sqlite"
 S2_BASELINE_SUMMARY_NAME = "kiss_payment_settlement_refresh_summary.json"
 S2_REFRESH_SCRIPT = ROOT / "scripts" / "refresh_kiss_payment_settlement.py"
+S2_GUARD_REFRESH_SCRIPT = ROOT / "scripts" / "refresh_s2_reference_guards.py"
 S2_ENV_FILE = ROOT / ".env"
 S2_REFRESH_START_DATE = date(1900, 1, 1)
+S2_FAST_PAGE_SIZE = "1000000"
+S2_NOVEL_CONTENT_STYLE_CODE = "102"
 AUTO_PLATFORM_OPTION = "엑셀 파일명으로 자동감지"
 S2_SESSION_USERNAME_KEY = "s2_session_username"
 S2_SESSION_PASSWORD_KEY = "s2_session_password"
@@ -127,6 +139,12 @@ def cache_metrics(path: Path) -> dict[str, int]:
     if "판매채널콘텐츠ID" in frame.columns:
         metrics["sales_channel_content_id_nonblank"] = int(frame["판매채널콘텐츠ID"].map(str).str.strip().ne("").sum())
     return metrics
+
+
+def lookup_row_count(path: Path) -> int:
+    if not path.exists():
+        return 0
+    return len(pd.read_csv(path, dtype=object))
 
 
 def streamlit_s2_secret_values() -> dict[str, str]:
@@ -209,10 +227,29 @@ def run_s2_refresh(mode: str, start_date: date | None = None, end_date: date | N
         str(S2_ENV_FILE),
         "--mode",
         mode,
+        "--lookup-only",
+        "--page-size",
+        S2_FAST_PAGE_SIZE,
+        "--content-style-code",
+        S2_NOVEL_CONTENT_STYLE_CODE,
     ]
     if mode == "custom" and start_date is not None and end_date is not None:
         command.extend(["--start-date", start_date.isoformat(), "--end-date", end_date.isoformat()])
     return subprocess.run(command, cwd=ROOT, text=True, capture_output=True, timeout=900, env=s2_refresh_environment())
+
+
+def run_s2_guard_refresh() -> subprocess.CompletedProcess[str]:
+    command = [
+        sys.executable,
+        str(S2_GUARD_REFRESH_SCRIPT),
+        "--env-file",
+        str(S2_ENV_FILE),
+        "--page-size",
+        S2_FAST_PAGE_SIZE,
+        "--content-style-code",
+        S2_NOVEL_CONTENT_STYLE_CODE,
+    ]
+    return subprocess.run(command, cwd=ROOT, text=True, capture_output=True, timeout=300, env=s2_refresh_environment())
 
 
 def run_s2_auth_check() -> subprocess.CompletedProcess[str]:
@@ -229,8 +266,19 @@ def run_s2_auth_check() -> subprocess.CompletedProcess[str]:
 
 
 def run_s2_full_replace() -> tuple[subprocess.CompletedProcess[str], str]:
-    completed = run_s2_refresh("full-replace")
-    return completed, f"{S2_REFRESH_START_DATE.isoformat()} ~ {date.today().isoformat()}"
+    payment_completed = run_s2_refresh("full-replace")
+    refresh_scope = f"{S2_REFRESH_START_DATE.isoformat()} ~ {date.today().isoformat()}"
+    if payment_completed.returncode != 0:
+        return payment_completed, refresh_scope
+
+    guard_completed = run_s2_guard_refresh()
+    combined = subprocess.CompletedProcess(
+        args=[payment_completed.args, guard_completed.args],
+        returncode=guard_completed.returncode,
+        stdout=f"{payment_completed.stdout}\n{guard_completed.stdout}",
+        stderr=f"{payment_completed.stderr}\n{guard_completed.stderr}",
+    )
+    return combined, f"{refresh_scope} + 누락/청구 보조 기준"
 
 
 def s2_refresh_error_message(completed: subprocess.CompletedProcess[str], refresh_scope: str) -> str:
@@ -238,6 +286,9 @@ def s2_refresh_error_message(completed: subprocess.CompletedProcess[str], refres
     if looks_like_s2_auth_failure(output):
         return f"{S2_AUTH_FAILURE_HINT} API 다운로드를 진행하지 못했습니다. ({refresh_scope})"
     if refresh_scope == "로그인 확인":
+        detail = " ".join(str(output or "").split())[:300]
+        if detail:
+            return f"S2 로그인 확인 실패: API 다운로드를 시작하지 않았습니다. ({refresh_scope}) 원인 로그: {detail}"
         return f"S2 로그인 확인 실패: API 다운로드를 시작하지 않았습니다. ({refresh_scope})"
     return f"S2 기준 전체 교체 실패: {refresh_scope}"
 
@@ -455,14 +506,30 @@ def load_selected_s2_basis(
     use_payment_cache: bool,
     payment_settlement_file: object | None,
     s2_file: object | None,
-) -> tuple[pd.DataFrame, str, dict[str, Any] | None]:
+) -> tuple[pd.DataFrame, str, dict[str, Any] | None, S2ReferenceGuards, S2GuardFilterResult]:
+    guards = load_s2_reference_guards(missing_path=S2_MISSING_LOOKUP, billing_path=S2_BILLING_LOOKUP)
     if payment_settlement_file is not None:
         payment_df = load_payment_settlement_list(payment_settlement_file)
-        return to_s2_lookup(payment_df), "수동 S2 원천 엑셀", summarize_payment_settlement(payment_df)
+        guard_result = apply_missing_exclusions(to_s2_lookup(payment_df), guards)
+        label = guarded_s2_source_label("수동 S2 원천 엑셀", guards, guard_result)
+        return guard_result.frame, label, summarize_payment_settlement(payment_df), guards, guard_result
     if use_payment_cache:
-        return drop_disabled_rows(pd.read_csv(S2_SOURCE_LOOKUP, dtype=object)), "로컬 S2 기준", None
+        guard_result = apply_missing_exclusions(pd.read_csv(S2_SOURCE_LOOKUP, dtype=object), guards)
+        label = guarded_s2_source_label("로컬 S2 기준", guards, guard_result)
+        return guard_result.frame, label, None, guards, guard_result
     s2_df, s2_source_label, payment_summary = load_manual_s2_reference(s2_file)
-    return s2_df, s2_source_label, payment_summary
+    guard_result = apply_missing_exclusions(s2_df, guards)
+    label = guarded_s2_source_label(s2_source_label, guards, guard_result)
+    return guard_result.frame, label, payment_summary, guards, guard_result
+
+
+def guarded_s2_source_label(source_label: str, guards: S2ReferenceGuards, guard_result: S2GuardFilterResult) -> str:
+    parts: list[str] = []
+    if len(guards.missing):
+        parts.append(f"누락 {guard_result.excluded_count:,} 제외")
+    if len(guards.billing):
+        parts.append(f"청구 {len(guards.billing):,} 보조")
+    return f"{source_label} ({', '.join(parts)})" if parts else source_label
 
 
 def process_settlement_batch_item(
@@ -470,6 +537,8 @@ def process_settlement_batch_item(
     settlement_file: object,
     selected_s2_channel: str,
     s2_df: pd.DataFrame,
+    s2_guards: S2ReferenceGuards,
+    s2_guard_filter: S2GuardFilterResult,
     master_df: pd.DataFrame | None,
     output_stem: str,
 ) -> dict[str, Any]:
@@ -532,10 +601,14 @@ def process_settlement_batch_item(
         elif s2_channel_filter.reason:
             warning_messages.append(s2_channel_filter.reason)
         mapping = build_mapping(s2_channel_filter.frame, settlement_df, master_df)
+        mapping = annotate_mapping_result(mapping, s2_guards, sales_channel=s2_channel)
         filter_validation = s2_filter_validation_rows(s2_channel_filter)
         if not filter_validation.empty:
             mapping.input_validation = pd.concat([filter_validation, mapping.input_validation], ignore_index=True)
+        if not s2_guard_filter.input_validation.empty:
+            mapping.input_validation = pd.concat([s2_guard_filter.input_validation, mapping.input_validation], ignore_index=True)
         summary = dict(zip(mapping.summary["항목"], mapping.summary["값"]))
+        summary["S2 정산정보 누락 제외 행 수"] = s2_guard_filter.excluded_count
         if s2_channel_filter.active:
             summary["S2 필터 전 행 수"] = s2_channel_filter.before_rows
             summary["S2 필터 후 행 수"] = s2_channel_filter.after_rows
@@ -583,6 +656,9 @@ def batch_summary_frame(results: list[dict[str, Any]]) -> pd.DataFrame:
                     else ""
                 ),
                 "검토필요": mapping_summary.get("검토필요 행 수", ""),
+                "누락 후보": mapping_summary.get("S2 정산정보 누락 후보", ""),
+                "청구 후보": mapping_summary.get("청구정산 후보", ""),
+                "누락 제외": mapping_summary.get("S2 정산정보 누락 제외 행 수", ""),
                 "S2 전송자료": transfer_exportable,
                 "메시지": result.get("error", ""),
             }
@@ -765,7 +841,7 @@ with st.sidebar:
     sync_browser_s2_id_memory()
     st.caption(
         f"전체 교체 방식으로 고정합니다. 조회 범위는 "
-        f"{S2_REFRESH_START_DATE.isoformat()}부터 오늘까지이며, 콘텐츠형태 제한은 두지 않습니다."
+        f"{S2_REFRESH_START_DATE.isoformat()}부터 오늘까지이며, 콘텐츠형태는 소설로 고정합니다."
     )
     render_sidebar_mini_warning("영구저장이 아니라, 서버에 임시 저장됩니다.")
 
@@ -773,6 +849,9 @@ with st.sidebar:
     cache_cols = st.columns(2)
     cache_cols[0].metric("현재 S2 기준 행", f"{current_cache['rows']:,}")
     cache_cols[1].metric("S2 ID", f"{current_cache['sales_channel_content_id_nonblank']:,}")
+    guard_cols = st.columns(2)
+    guard_cols[0].metric("누락 guard", f"{lookup_row_count(S2_MISSING_LOOKUP):,}")
+    guard_cols[1].metric("청구 guard", f"{lookup_row_count(S2_BILLING_LOOKUP):,}")
 
     if "s2_refresh_message" in st.session_state:
         st.success(st.session_state.pop("s2_refresh_message"))
@@ -941,6 +1020,7 @@ with st.expander("2. S2 기준 / IPS 보조 검산", expanded=False):
         s2_source_mode = st.radio("S2 기준", s2_source_options, horizontal=True)
         use_payment_cache = s2_source_mode == "로컬 S2 기준 사용"
         if not use_payment_cache:
+            st.warning("수동 S2 업로드는 예외 모드입니다. 가능한 한 로컬 S2 기준 전체 교체 결과를 사용하세요.")
             manual_cols = st.columns(2)
             with manual_cols[0]:
                 payment_settlement_file = st.file_uploader(
@@ -960,6 +1040,7 @@ with st.expander("2. S2 기준 / IPS 보조 검산", expanded=False):
         use_payment_cache = False
         st.warning("로컬 S2 기준이 없습니다. 사이드바에서 S2 최신화를 실행하거나 S2 기준 파일을 업로드하세요.")
         manual_cols = st.columns(2)
+        st.warning("수동 S2 업로드는 예외 모드입니다. 가능한 한 사이드바에서 S2 최신화를 먼저 실행하세요.")
         with manual_cols[0]:
             payment_settlement_file = st.file_uploader(
                 "S2 원천 엑셀",
@@ -1026,7 +1107,7 @@ try:
     results: list[dict[str, Any]] = []
     with st.status("S2 기준과 정산서 엑셀을 처리하는 중", expanded=True) as status:
         st.write("S2 기준 불러오는 중")
-        s2_df, s2_source_label, payment_summary = load_selected_s2_basis(
+        s2_df, s2_source_label, payment_summary, s2_guards, s2_guard_filter = load_selected_s2_basis(
             use_payment_cache=use_payment_cache,
             payment_settlement_file=payment_settlement_file,
             s2_file=s2_file,
@@ -1044,6 +1125,8 @@ try:
                     settlement_file=settlement_file,
                     selected_s2_channel=selected_s2_channel,
                     s2_df=s2_df,
+                    s2_guards=s2_guards,
+                    s2_guard_filter=s2_guard_filter,
                     master_df=master_df,
                     output_stem=output_stem,
                 )

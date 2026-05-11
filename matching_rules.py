@@ -294,7 +294,12 @@ def platform_for_s2_sales_channel(sales_channel: str) -> str | None:
 
 
 def detect_s2_sales_channel(source_name: Any) -> S2SalesChannelDetection | None:
-    haystack = _channel_key(_filename_text(source_name))
+    filename = _filename_text(source_name)
+    explicit_channel = _explicit_s2_channel_from_filename(filename)
+    if explicit_channel:
+        return explicit_channel
+
+    haystack = _channel_key(filename)
     if not haystack:
         return None
     matches: list[tuple[int, str, str]] = []
@@ -306,6 +311,19 @@ def detect_s2_sales_channel(source_name: Any) -> S2SalesChannelDetection | None:
         return None
     _, channel, platform = sorted(matches, reverse=True)[0]
     return S2SalesChannelDetection(sales_channel=channel, platform=platform)
+
+
+def _explicit_s2_channel_from_filename(filename: str) -> S2SalesChannelDetection | None:
+    parts = Path(filename).stem.split("__")
+    if len(parts) < 3:
+        return None
+    candidate_key = _channel_key(parts[1])
+    if not candidate_key:
+        return None
+    for channel, platform in s2_sales_channel_to_platform().items():
+        if _channel_key(channel) == candidate_key:
+            return S2SalesChannelDetection(sales_channel=channel, platform=platform)
+    return None
 
 
 DEFAULT_S2_CHANNEL_POLICY = S2ChannelPolicy()

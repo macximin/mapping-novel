@@ -289,6 +289,55 @@ def import_payment_settlement_frame(
     )
 
 
+def import_payment_settlement_lookup_only(
+    incoming: pd.DataFrame,
+    *,
+    s2_lookup_path: str | Path,
+) -> PaymentSettlementImportResult:
+    prepared = _prepare_payment_settlement_frame(incoming)
+    s2_lookup = Path(s2_lookup_path)
+    existing_lookup = pd.read_csv(s2_lookup, dtype=object) if s2_lookup.exists() else None
+    lookup = to_s2_lookup(prepared)
+    existing_lookup_for_audit = _filter_existing_lookup_to_refresh_scope(existing_lookup, lookup)
+    change_rows = build_s2_change_audit(existing_lookup_for_audit, lookup)
+    change_summary = summarize_s2_change_audit(change_rows)
+    summary = summarize_payment_settlement(prepared)
+    summary["cache_mode"] = "lookup_only"
+    summary["s2_change_summary"] = change_summary
+
+    s2_lookup.parent.mkdir(parents=True, exist_ok=True)
+    temp_lookup = s2_lookup.with_name(f"{s2_lookup.stem}.tmp{s2_lookup.suffix}")
+    lookup.to_csv(temp_lookup, index=False, encoding="utf-8-sig")
+    temp_lookup.replace(s2_lookup)
+
+    return PaymentSettlementImportResult(
+        source_rows=len(prepared),
+        cache_rows_before=0 if existing_lookup_for_audit is None else len(existing_lookup_for_audit),
+        cache_rows_after=len(lookup),
+        s2_lookup_rows=len(lookup),
+        s2_change_added=change_summary["added"],
+        s2_change_deleted=change_summary["deleted"],
+        s2_change_modified=change_summary["modified"],
+        s2_change_rows=change_rows,
+        output_cache=s2_lookup,
+        output_cache_parts=(),
+        output_s2_lookup=s2_lookup,
+        summary=summary,
+    )
+
+
+def _filter_existing_lookup_to_refresh_scope(existing_lookup: pd.DataFrame | None, lookup: pd.DataFrame) -> pd.DataFrame | None:
+    if existing_lookup is None or existing_lookup.empty:
+        return existing_lookup
+    if "콘텐츠형태" not in existing_lookup.columns or "콘텐츠형태" not in lookup.columns:
+        return existing_lookup
+    refreshed_shapes = {value for value in lookup["콘텐츠형태"].map(text) if value}
+    if not refreshed_shapes:
+        return existing_lookup
+    filtered = existing_lookup[existing_lookup["콘텐츠형태"].map(text).isin(refreshed_shapes)].copy()
+    return filtered
+
+
 def cache_part_paths(cache_path: str | Path) -> list[Path]:
     cache = Path(cache_path)
     return sorted(cache.parent.glob(f"{cache.stem}_part_*{cache.suffix}"))
@@ -343,6 +392,18 @@ def payment_settlement_frame_from_api_rows(rows: list[dict[str, Any]]) -> pd.Dat
         validate_payment_settlement_columns(frame)
         converted = frame
     return _prepare_payment_settlement_frame(converted)
+
+
+def payment_settlement_minimal_frame_from_api_rows(rows: list[dict[str, Any]]) -> pd.DataFrame:
+    records: list[dict[str, Any]] = []
+    for row in rows:
+        record = {
+            standard_column: row.get(raw_column)
+            for raw_column, standard_column in API_RAW_COLUMN_ALIASES.items()
+        }
+        record["작가명"] = row.get("bcncNm")
+        records.append(record)
+    return _prepare_payment_settlement_frame(pd.DataFrame(records))
 
 
 def save_summary(path: str | Path, result: PaymentSettlementImportResult) -> None:

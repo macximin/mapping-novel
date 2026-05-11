@@ -4,15 +4,27 @@ import fnmatch
 import io
 import re
 import unicodedata
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, BinaryIO, Iterable
+from xml.etree import ElementTree as ET
 
 import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
 from cleaning_rules import clean_title, text
+
+
+OOXML_MAIN_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+OOXML_REL_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+OOXML_PACKAGE_REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
+OOXML_NS = {
+    "x": OOXML_MAIN_NS,
+    "r": OOXML_REL_NS,
+    "pr": OOXML_PACKAGE_REL_NS,
+}
 
 
 STANDARD_TITLE_COLUMN = "상품명"
@@ -121,6 +133,34 @@ class NormalizationResult:
         return feed[[col for col in cols if col in feed.columns]].copy()
 
 
+@dataclass(frozen=True)
+class _FallbackMergedRange:
+    bounds: tuple[int, int, int, int]
+
+
+@dataclass
+class _FallbackMergedCells:
+    ranges: list[_FallbackMergedRange]
+
+
+@dataclass
+class _FallbackWorksheet:
+    title: str
+    values: list[list[Any]]
+    merged_cells: _FallbackMergedCells
+
+    def iter_rows(self, *, values_only: bool = False):
+        if not values_only:
+            raise ValueError("OOXML fallback worksheets only support values_only=True")
+        for row in self.values:
+            yield tuple(row)
+
+
+@dataclass
+class _FallbackWorkbook:
+    worksheets: list[_FallbackWorksheet]
+
+
 def adapter_audit_dataframe(result: NormalizationResult) -> pd.DataFrame:
     return pd.DataFrame(
         [
@@ -143,7 +183,7 @@ def adapter_blocking_messages(result: NormalizationResult) -> list[str]:
     if result.file_status == "excluded_by_rule":
         messages.append(f"파일 제외 규칙에 걸렸습니다: {result.spec.exclude_rule}")
     if result.file_status == "review_gate_not_default":
-        messages.append("중복 또는 사람이 가공한 파일일 가능성이 있어 S2 매핑 입력에서 제외했습니다.")
+        messages.append("통합본/확장체크 등 검토용 변형 파일이라 기본 S2 매핑 입력에서 제외했습니다.")
     if result.spec.blocks_default_feed:
         messages.append(f"S2 매핑 입력 차단 대상입니다: {result.spec.s2_gate}")
     if result.rows.empty:
@@ -152,7 +192,7 @@ def adapter_blocking_messages(result: NormalizationResult) -> list[str]:
         messages.append("파싱은 됐지만 S2 매핑으로 보낼 입력 행이 없습니다.")
     if any(audit.status == "header_not_found" for audit in result.sheet_audits):
         failed = ", ".join(audit.sheet for audit in result.sheet_audits if audit.status == "header_not_found")
-        messages.append(f"헤더를 찾지 못한 시트가 있습니다: {failed}")
+        messages.append(f"헤더를 찾지 못한 시트가 있습니다: {failed}. 시트명, 헤더 위치, 헤더명이 바뀌었는지 확인하세요.")
     return messages
 
 
@@ -256,7 +296,185 @@ def summarize_normalization(result: NormalizationResult) -> dict[str, Any]:
 def _load_workbook(source: str | Path | BinaryIO | io.BytesIO):
     if hasattr(source, "seek"):
         source.seek(0)
-    return load_workbook(source, data_only=True, read_only=False)
+    try:
+        return load_workbook(source, data_only=True, read_only=False)
+    except Exception:
+        if hasattr(source, "seek"):
+            source.seek(0)
+        return _load_workbook_values_only_ooxml(source)
+
+
+def _load_workbook_values_only_ooxml(source: str | Path | BinaryIO | io.BytesIO) -> _FallbackWorkbook:
+    with _zipfile_from_source(source) as archive:
+        shared_strings = _read_shared_strings(archive)
+        workbook_root = _read_xml_from_archive(archive, "xl/workbook.xml")
+        rels = _read_workbook_relationships(archive)
+        worksheets: list[_FallbackWorksheet] = []
+        for sheet_node in workbook_root.findall("x:sheets/x:sheet", OOXML_NS):
+            title = sheet_node.attrib.get("name", "")
+            rel_id = sheet_node.attrib.get(f"{{{OOXML_REL_NS}}}id", "")
+            target = rels.get(rel_id, "")
+            if not target:
+                continue
+            sheet_path = _normalize_ooxml_path("xl", target)
+            if sheet_path not in archive.namelist():
+                continue
+            sheet_root = _read_xml_from_archive(archive, sheet_path)
+            values, merged_ranges = _read_sheet_values(sheet_root, shared_strings)
+            worksheets.append(
+                _FallbackWorksheet(
+                    title=title,
+                    values=values,
+                    merged_cells=_FallbackMergedCells(merged_ranges),
+                )
+            )
+    if not worksheets:
+        raise ValueError("OOXML fallback failed: no worksheets could be read")
+    return _FallbackWorkbook(worksheets=worksheets)
+
+
+def _zipfile_from_source(source: str | Path | BinaryIO | io.BytesIO) -> zipfile.ZipFile:
+    if isinstance(source, (str, Path)):
+        return zipfile.ZipFile(source)
+    if hasattr(source, "seek"):
+        source.seek(0)
+    payload = source.read()
+    if isinstance(payload, str):
+        payload = payload.encode()
+    return zipfile.ZipFile(io.BytesIO(payload))
+
+
+def _read_xml_from_archive(archive: zipfile.ZipFile, name: str) -> ET.Element:
+    try:
+        return ET.fromstring(archive.read(name))
+    except KeyError as exc:
+        raise ValueError(f"OOXML fallback failed: missing {name}") from exc
+    except ET.ParseError as exc:
+        raise ValueError(f"OOXML fallback failed: invalid XML {name}: {exc}") from exc
+
+
+def _read_workbook_relationships(archive: zipfile.ZipFile) -> dict[str, str]:
+    root = _read_xml_from_archive(archive, "xl/_rels/workbook.xml.rels")
+    result: dict[str, str] = {}
+    for rel in root.findall("pr:Relationship", OOXML_NS):
+        rel_id = rel.attrib.get("Id", "")
+        target = rel.attrib.get("Target", "")
+        if rel_id and target:
+            result[rel_id] = target
+    return result
+
+
+def _normalize_ooxml_path(base_dir: str, target: str) -> str:
+    target = target.replace("\\", "/")
+    if target.startswith("/"):
+        return target.lstrip("/")
+    parts: list[str] = []
+    for part in f"{base_dir}/{target}".split("/"):
+        if part in {"", "."}:
+            continue
+        if part == "..":
+            if parts:
+                parts.pop()
+            continue
+        parts.append(part)
+    return "/".join(parts)
+
+
+def _read_shared_strings(archive: zipfile.ZipFile) -> list[str]:
+    if "xl/sharedStrings.xml" not in archive.namelist():
+        return []
+    root = _read_xml_from_archive(archive, "xl/sharedStrings.xml")
+    result: list[str] = []
+    for item in root.findall("x:si", OOXML_NS):
+        result.append("".join(node.text or "" for node in item.findall(".//x:t", OOXML_NS)))
+    return result
+
+
+def _read_sheet_values(root: ET.Element, shared_strings: list[str]) -> tuple[list[list[Any]], list[_FallbackMergedRange]]:
+    cells: dict[tuple[int, int], Any] = {}
+    max_row = 0
+    max_col = 0
+    for row_node in root.findall(".//x:sheetData/x:row", OOXML_NS):
+        row_idx = int(row_node.attrib.get("r", "0") or 0)
+        if row_idx <= 0:
+            row_idx = max_row + 1
+        sequential_col = 0
+        for cell_node in row_node.findall("x:c", OOXML_NS):
+            ref = cell_node.attrib.get("r", "")
+            if ref:
+                parsed_row, col_idx = _split_cell_ref(ref)
+                row_idx = parsed_row or row_idx
+            else:
+                sequential_col += 1
+                col_idx = sequential_col
+            value = _read_cell_value(cell_node, shared_strings)
+            cells[(row_idx, col_idx)] = value
+            max_row = max(max_row, row_idx)
+            max_col = max(max_col, col_idx)
+
+    values = [[None for _ in range(max_col)] for _ in range(max_row)]
+    for (row_idx, col_idx), value in cells.items():
+        if row_idx > 0 and col_idx > 0:
+            values[row_idx - 1][col_idx - 1] = value
+
+    merged_ranges = []
+    for merge_node in root.findall(".//x:mergeCells/x:mergeCell", OOXML_NS):
+        ref = merge_node.attrib.get("ref", "")
+        bounds = _range_bounds(ref)
+        if bounds is not None:
+            merged_ranges.append(_FallbackMergedRange(bounds=bounds))
+    return values, merged_ranges
+
+
+def _read_cell_value(cell_node: ET.Element, shared_strings: list[str]) -> Any:
+    cell_type = cell_node.attrib.get("t", "")
+    if cell_type == "inlineStr":
+        return "".join(node.text or "" for node in cell_node.findall(".//x:t", OOXML_NS))
+    value_node = cell_node.find("x:v", OOXML_NS)
+    raw = value_node.text if value_node is not None else ""
+    if cell_type == "s":
+        try:
+            return shared_strings[int(raw)]
+        except (ValueError, IndexError):
+            return ""
+    if cell_type == "str":
+        return raw or ""
+    if cell_type == "b":
+        return raw == "1"
+    if raw in (None, ""):
+        return ""
+    try:
+        number = float(raw)
+        return int(number) if number.is_integer() else number
+    except ValueError:
+        return raw
+
+
+def _split_cell_ref(ref: str) -> tuple[int, int]:
+    match = re.fullmatch(r"([A-Za-z]+)(\d+)", ref)
+    if not match:
+        return 0, 0
+    return int(match.group(2)), _column_letters_to_number(match.group(1))
+
+
+def _range_bounds(ref: str) -> tuple[int, int, int, int] | None:
+    if ":" not in ref:
+        return None
+    start, end = ref.split(":", 1)
+    min_row, min_col = _split_cell_ref(start)
+    max_row, max_col = _split_cell_ref(end)
+    if not all([min_row, min_col, max_row, max_col]):
+        return None
+    return min_col, min_row, max_col, max_row
+
+
+def _column_letters_to_number(value: str) -> int:
+    number = 0
+    for char in value.upper():
+        if not ("A" <= char <= "Z"):
+            return 0
+        number = number * 26 + (ord(char) - ord("A") + 1)
+    return number
 
 
 def _empty_rows() -> pd.DataFrame:
@@ -272,8 +490,6 @@ def _file_status(spec: AdapterSpec, source_name: str) -> str:
     if spec.platform == "네이버" and "통합" in source_name:
         return "review_gate_not_default"
     if "확장체크" in source_name:
-        return "review_gate_not_default"
-    if "사람가공" in normalized:
         return "review_gate_not_default"
     return "include"
 
@@ -559,7 +775,7 @@ _REGISTRY_ROWS = [
     ("모픽", "single_header_variants", "single_header_policy_gate", "작품별정산", "", "작품명", "작가명", "없음", "총 매출액 또는 순 매출액", "정산액", "총 매출액-순 매출액 후보", "needs_policy", "총/순 매출 기준 확정 후 S2 출력"),
     ("무툰", "merged_header_coin_table", "single_header_amount_policy_required", "Sheet", "", "타이틀", "작가", "없음", "합계 / 사용코인 후보", "정산총액 또는 정산금액", "공제수수료 / 취소코인", "needs_coin_policy", "코인-원화 및 취소/공제 기준 확정 전 S2 출력 금지"),
     ("문피아", "single_header_limited_columns", "single_header_policy_gate", "다우인큐브", "", "작품", "작가", "작품코드", "총매출", "정산", "구매취소 / 대여취소", "needs_cancel_policy", "취소/IOS/Google 포함 여부 확정 후 S2 출력"),
-    ("미소설", "single_header_variants", "single_header_policy_gate", "cpexcel*", "확장체크/사람가공 파일은 fixture 제외", "타이틀", "작가명", "작품번호", "전체매출(원)", "총지급액(원) 또는 지급액(원) ASP", "결제수수료(원)", "needs_policy", "지급액 컬럼 선택 기준 확정 후 S2 출력"),
+    ("미소설", "single_header_variants", "single_header_policy_gate", "cpexcel*", "확장체크 파일은 fixture 제외", "타이틀", "작가명", "작품번호", "전체매출(원)", "총지급액(원) 또는 지급액(원) ASP", "결제수수료(원)", "needs_policy", "지급액 컬럼 선택 기준 확정 후 S2 출력"),
     ("미스터블루", "sheet_whitelist_workbook", "mixed_sheet_policy_gate", "작품별 우선, 볼륨별은 검산/보조 후보", "정산기준 없는 보조 시트는 출력 제외", "작품명", "작가명", "작품코드", "작품별 합계(정액+종량) / 볼륨별 소계 후보", "정산기준액 후보 없음. 정책 필요", "없음 확인 필요", "blocked_until_settlement_basis", "정산기준액 정의 전 S2 출력 금지"),
     ("밀리의서재", "single_header_variants", "single_header_policy_gate", "list", "", "콘텐츠명", "저자명", "전자출판물 ISBN / 유통사 상품코드", "발생 금액", "정산 예정 금액 / 정산 금액", "없음 확인 필요", "candidate_confirmed_after_reconcile", "에피소드명 집계 단위 확정 + 총액 reconcile 후 출력"),
     ("보인&국립장애인도서관", "purchase_selection_list", "non_s2_source_blocked", "없음", "목록선정*", "제목", "저자명", "없음", "판매가 / 구매비", "정산기준액 없음", "없음", "blocked_non_sales", "S2 판매상세가 아니라 구매/목록선정 자료로 판단. 기본 출력 금지"),

@@ -78,6 +78,51 @@ class S2TransferTest(unittest.TestCase):
         self.assertEqual(len(result.blocked_rows), 1)
         self.assertIn("matched가 아닙니다", result.blocked_rows.loc[0, "차단사유"])
 
+    def test_blocks_duplicate_s2_candidates_even_after_auto_selection(self) -> None:
+        rows = pd.DataFrame(
+            [
+                {
+                    "정산서_콘텐츠명": "중복 후보 작품",
+                    "S2_매칭상태": "matched",
+                    "S2_판매채널콘텐츠ID": "123",
+                    "S2_후보수": "2",
+                    "정산서원본_판매금액_후보": 1000,
+                    "정산서원본_정산기준액_후보": 700,
+                    "정산서원본_상계금액_후보": 300,
+                }
+            ]
+        )
+
+        result = build_s2_transfer(rows, amount_policy_locked=True, s2_gate="confirmed")
+
+        self.assertFalse(result.exportable)
+        self.assertEqual(len(result.rows), 0)
+        self.assertEqual(len(result.blocked_rows), 1)
+        self.assertIn("S2 중복 후보", result.blocked_rows.loc[0, "차단사유"])
+
+    def test_blocks_rows_with_s2_split_reason(self) -> None:
+        rows = pd.DataFrame(
+            [
+                {
+                    "정산서_콘텐츠명": "청구 후보 작품",
+                    "S2_매칭상태": "matched",
+                    "S2_판매채널콘텐츠ID": "123",
+                    "S2_후보수": "1",
+                    "S2_분리사유": "청구정산 후보",
+                    "정산서원본_판매금액_후보": 1000,
+                    "정산서원본_정산기준액_후보": 700,
+                    "정산서원본_상계금액_후보": 300,
+                }
+            ]
+        )
+
+        result = build_s2_transfer(rows, amount_policy_locked=True, s2_gate="confirmed")
+
+        self.assertFalse(result.exportable)
+        self.assertEqual(len(result.rows), 0)
+        self.assertEqual(len(result.blocked_rows), 1)
+        self.assertIn("S2 분리사유", result.blocked_rows.loc[0, "차단사유"])
+
 
 if __name__ == "__main__":
     unittest.main()

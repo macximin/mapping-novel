@@ -62,6 +62,10 @@ def build_s2_transfer(
 
         if text(row.get("S2_매칭상태")) != MATCH_OK:
             reasons.append(f"S2 매칭상태가 matched가 아닙니다: {text(row.get('S2_매칭상태'))}")
+        if _integer_or_zero(row.get("S2_후보수")) > 1:
+            reasons.append(f"S2 중복 후보가 있습니다: {text(row.get('S2_후보수'))}개")
+        if text(row.get("S2_분리사유")):
+            reasons.append(f"S2 분리사유가 있습니다: {text(row.get('S2_분리사유'))}")
         if not s2_id:
             reasons.append("판매채널콘텐츠ID가 비었습니다.")
         if sale_amount is None:
@@ -198,6 +202,13 @@ def _number_or_none(value: Any) -> float | None:
         return float(cleaned)
     except ValueError:
         return None
+
+
+def _integer_or_zero(value: Any) -> int:
+    number = _number_or_none(value)
+    if number is None:
+        return 0
+    return int(number)
 
 
 def _normalize_number(value: float | None) -> int | float:

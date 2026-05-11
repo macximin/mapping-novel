@@ -91,7 +91,9 @@ def normalize_s2_login_values(username: object, password: object) -> dict[str, s
     password_text = str(password or "").strip()
     if not username_text or not password_text:
         return {}
-    return {"S2_ID": username_text, "S2_PW": password_text}
+    values = {key: username_text for key in S2_USERNAME_KEYS}
+    values.update({key: password_text for key in S2_PASSWORD_KEYS})
+    return values
 
 
 def normalize_s2_secret_values(secrets: object) -> dict[str, str]:
@@ -99,6 +101,10 @@ def normalize_s2_secret_values(secrets: object) -> dict[str, str]:
 
     _copy_exact_keys(values, secrets, S2_USERNAME_KEYS + S2_PASSWORD_KEYS + S2_API_BASE_URL_KEYS + S2_ACCESS_TOKEN_KEYS)
     _copy_section_alias(values, secrets)
+    username = first_config_value(values, S2_USERNAME_KEYS)
+    password = first_config_value(values, S2_PASSWORD_KEYS)
+    if username and password:
+        values.update(normalize_s2_login_values(username, password))
     return values
 
 
