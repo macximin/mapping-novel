@@ -784,6 +784,7 @@ def inject_compact_layout_css() -> None:
         .block-container {
             padding-top: 3.4rem !important;
             padding-bottom: 1.25rem;
+            max-width: 1280px;
         }
         .app-title {
             display: block;
@@ -808,6 +809,77 @@ def inject_compact_layout_css() -> None:
         div[data-testid="stAlert"] {
             padding: 0.5rem 0.75rem;
         }
+        section[data-testid="stSidebar"] div[data-testid="stMetricValue"] {
+            font-size: 1.55rem;
+            line-height: 1.15;
+        }
+        section[data-testid="stSidebar"] div[data-testid="stMetricLabel"] {
+            font-size: 0.72rem;
+        }
+        .workflow-caption {
+            color: #6b7280;
+            font-size: 0.78rem;
+            margin: 0.25rem 0 1.4rem 0;
+        }
+        .section-kicker {
+            color: #6b7280;
+            font-size: 0.82rem;
+            margin: -0.1rem 0 0.5rem 0;
+        }
+        .example-strip {
+            align-items: center;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+            margin: 0.25rem 0 0.85rem 0;
+        }
+        .example-strip-label {
+            color: #6b7280;
+            font-size: 0.78rem;
+            margin-right: 0.1rem;
+        }
+        .example-chip {
+            background: #f3f4f6;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.35rem;
+            color: #374151;
+            display: inline-block;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 0.74rem;
+            line-height: 1.2;
+            padding: 0.22rem 0.38rem;
+        }
+        .upload-status-strip {
+            display: grid;
+            gap: 0.55rem;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            margin: 0.15rem 0 0.35rem 0;
+        }
+        .upload-status-item {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.45rem;
+            padding: 0.55rem 0.7rem;
+        }
+        .upload-status-label {
+            color: #6b7280;
+            display: block;
+            font-size: 0.72rem;
+            line-height: 1.2;
+            margin-bottom: 0.25rem;
+        }
+        .upload-status-value {
+            color: #111827;
+            display: block;
+            font-size: 0.98rem;
+            font-weight: 650;
+            line-height: 1.25;
+        }
+        @media (max-width: 760px) {
+            .upload-status-strip {
+                grid-template-columns: 1fr;
+            }
+        }
         .sidebar-mini-notice {
             border-radius: 0.45rem;
             font-size: 0.55rem;
@@ -830,21 +902,22 @@ def inject_compact_layout_css() -> None:
             margin-bottom: 0.2rem;
         }
         section[data-testid="stFileUploaderDropzone"] {
-            min-height: 3.1rem;
-            padding: 0.35rem 0.65rem;
+            min-height: 3rem;
+            padding: 0.35rem 0.7rem;
             overflow: hidden;
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 0.25rem;
+            border-color: #cbd5e1;
             border-style: dashed;
-            border-radius: 0.2rem;
-            background: #ffffff;
+            border-radius: 0.45rem;
+            background: #fafafa;
         }
         section[data-testid="stFileUploaderDropzone"]::before {
-            content: "정산서 엑셀을 끌어오거나";
+            content: "정산서 엑셀 끌어오기";
             color: #4b5563;
-            font-size: 0.88rem;
+            font-size: 0.82rem;
             pointer-events: none;
         }
         section[data-testid="stFileUploaderDropzone"] > div {
@@ -913,6 +986,38 @@ def render_sidebar_mini_notice(message: str, *, tone: str = "info") -> None:
     class_name = "sidebar-mini-warning" if tone == "warning" else "sidebar-mini-info"
     st.markdown(
         f'<div class="sidebar-mini-notice {class_name}">{html.escape(message)}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_upload_examples() -> None:
+    examples = (
+        "네이버_장르_2026-02.xlsx",
+        "카카오페이지(소설)_2026-02.xlsx",
+        "블라이스_일반결제_2026-02.xlsx",
+    )
+    chips = "".join(f'<span class="example-chip">{html.escape(example)}</span>' for example in examples)
+    st.markdown(
+        f'<div class="example-strip"><span class="example-strip-label">파일명 예시</span>{chips}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_upload_status_strip(file_count: int, selected_s2_channel: str) -> None:
+    mode = "파일명 자동 감지" if selected_s2_channel == AUTO_PLATFORM_OPTION else f"직접 선택: {selected_s2_channel}"
+    st.markdown(
+        f"""
+        <div class="upload-status-strip">
+          <div class="upload-status-item">
+            <span class="upload-status-label">업로드된 파일</span>
+            <span class="upload-status-value">{file_count:,}개</span>
+          </div>
+          <div class="upload-status-item">
+            <span class="upload-status-label">판매채널 감지</span>
+            <span class="upload-status-value">{html.escape(mode)}</span>
+          </div>
+        </div>
+        """,
         unsafe_allow_html=True,
     )
 
@@ -1038,19 +1143,12 @@ with st.sidebar:
         st.caption("이 서버에서 실행한 S2 최신화 기록은 아직 없습니다.")
 
 
-st.caption("정산서 업로드 -> S2 판매채널명 확인 -> S2 매핑 -> 다운로드")
+st.markdown('<div class="workflow-caption">정산서 업로드 -> 판매채널 확인 -> S2 매핑 -> 다운로드</div>', unsafe_allow_html=True)
 
 st.subheader("1. 정산서 엑셀 업로드")
-st.caption("여러 플랫폼의 정산서를 한 번에 업로드할 수 있습니다. 지원 파일은 .xlsx입니다.")
-st.markdown(
-    """
-파일명 예시:
-- `네이버_장르_2026-02.xlsx`
-- `카카오페이지(소설)_2026-02.xlsx`
-- `블라이스_일반결제_2026-02.xlsx`
-"""
-)
-upload_cols = st.columns([2, 1])
+st.markdown('<div class="section-kicker">여러 플랫폼의 .xlsx 정산서를 한 번에 업로드할 수 있습니다.</div>', unsafe_allow_html=True)
+render_upload_examples()
+upload_cols = st.columns([1.7, 0.85])
 with upload_cols[0]:
     settlement_files = st.file_uploader(
         "정산서 엑셀 업로드",
@@ -1069,12 +1167,7 @@ with upload_cols[1]:
 settlement_files = list(settlement_files or [])
 detection_frame, undetected_files = upload_detection_rows(settlement_files, selected_s2_channel)
 
-upload_state_cols = st.columns(2)
-upload_state_cols[0].metric("업로드된 파일", f"{len(settlement_files):,}개")
-upload_state_cols[1].metric(
-    "판매채널 감지 방식",
-    "파일명 자동 감지" if selected_s2_channel == AUTO_PLATFORM_OPTION else "직접 선택",
-)
+render_upload_status_strip(len(settlement_files), selected_s2_channel)
 
 if settlement_files:
     if selected_s2_channel != AUTO_PLATFORM_OPTION:
