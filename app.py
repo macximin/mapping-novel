@@ -68,6 +68,7 @@ S2_REFRESH_START_DATE = date(1900, 1, 1)
 S2_FAST_PAGE_SIZE = "1000000"
 S2_NOVEL_CONTENT_STYLE_CODE = "102"
 S2_PAYMENT_MANAGEMENT_URL = "https://kiss.kld.kr/mst/stmi/pymt-setl"
+S2_DAILY_REFRESH_TIME_LABEL = "매일 10:00"
 AUTO_PLATFORM_OPTION = "엑셀 파일명으로 자동감지"
 S2_SESSION_USERNAME_KEY = "s2_session_username"
 S2_SESSION_PASSWORD_KEY = "s2_session_password"
@@ -1139,17 +1140,13 @@ st.caption("플랫폼별 정산서 엑셀을 S2 기준에 매핑합니다.")
 
 with st.sidebar:
     st.subheader("S2 기준 상태")
-    today = date.today()
-    window_start, window_end, in_refresh_window = next_admin_s2_refresh_window(today)
-    st.caption("Cloud 앱은 repo에 배포된 S2 지급정산 기준을 사용합니다. S2 직접 최신화는 관리자가 사내망 로컬에서 수행합니다.")
+    st.caption("Cloud 앱은 repo에 배포된 S2 지급정산 기준을 사용합니다. S2 직접 조회와 최신화는 사내망 PC의 자동 작업이 수행합니다.")
     render_sidebar_mini_notice(
-        f"관리자 정기 최신화: 매월 말일 7일 전부터 다음 달 7일까지 매일. "
-        f"{'현재 정기 최신화 창입니다.' if in_refresh_window else f'다음 창은 {window_start.isoformat()}~{window_end.isoformat()}입니다.'}",
+        f"S2 기준은 {S2_DAILY_REFRESH_TIME_LABEL} 자동 최신화됩니다. 최신화가 끝나면 repo에 커밋/푸시되고 Cloud 기준도 그 결과를 사용합니다.",
         tone="info",
     )
     render_sidebar_mini_notice(
-        "오늘 작업해야 하는데 기준이 최신화되어 있으면 그대로 실행하세요. "
-        "최신화가 안 되어 있으면 관리자에게 요청하거나 본문 2번 `S2 기준`에서 수동 파일 업로드를 사용하세요.",
+        "작업 전 아래 `S2 기준 업데이트` 시각을 먼저 확인하세요. 시각이 오래됐으면 관리자에게 요청하거나 본문 2번 `S2 기준`에서 수동 파일 업로드를 사용하세요.",
         tone="warning",
     )
 
@@ -1162,6 +1159,7 @@ with st.sidebar:
     guard_cols[1].metric("청구 guard", f"{lookup_row_count(S2_BILLING_LOOKUP):,}")
 
     repo_baseline = repo_s2_baseline_summary()
+    baseline_updated_at = ""
     if repo_baseline:
         payload = repo_baseline["payload"]
         summary = repo_baseline["summary"]
@@ -1183,13 +1181,13 @@ with st.sidebar:
             f"Repo 기준은 앱 배포 시 기본으로 읽는 S2 데이터입니다."
             f"{f' 업데이트: {baseline_updated_at}.' if baseline_updated_at else ''}"
             f"{f' 기준일: {baseline_date}.' if baseline_date else ''} "
-            "관리자 최신화 후 repo에 반영되어야 Cloud 사용자가 최신 기준을 씁니다."
+            "매일 자동 최신화 결과가 repo에 반영되어야 Cloud 사용자가 최신 기준을 씁니다."
         )
         with st.expander("Repo S2 기준 요약", expanded=False):
             st.dataframe(s2_source_summary_frame(summary), use_container_width=True, height=220)
             st.caption(f"요약 파일: {repo_baseline['path']}")
 
-    st.markdown("**최신화 실행 로그**")
+    st.markdown("**자동 최신화 로그**")
     recent_history = history_frame(5)
     if not recent_history.empty:
         latest = recent_history.iloc[0]
@@ -1207,7 +1205,13 @@ with st.sidebar:
             with st.expander("최근 S2 변경 이력 상세", expanded=False):
                 st.dataframe(change_detail, use_container_width=True, height=260)
     else:
-        st.caption("이 서버에서 직접 실행한 S2 최신화 기록은 아직 없습니다. Cloud에서는 위 Repo 기준일과 행 수를 먼저 확인하세요.")
+        log_rows = [
+            {"항목": "실행 주기", "값": S2_DAILY_REFRESH_TIME_LABEL},
+            {"항목": "실행 위치", "값": "사내망 PC 자동 작업"},
+            {"항목": "최근 기준 반영", "값": baseline_updated_at or "확인 필요"},
+            {"항목": "반영 방식", "값": "S2 JSON 최신화 -> repo 커밋/푸시 -> Cloud 기준 반영"},
+        ]
+        st.dataframe(pd.DataFrame(log_rows), use_container_width=True, hide_index=True, height=176)
 
 
 st.markdown('<div class="workflow-caption">정산서 업로드 -> 판매채널 확인 -> S2 매핑 -> 다운로드</div>', unsafe_allow_html=True)
