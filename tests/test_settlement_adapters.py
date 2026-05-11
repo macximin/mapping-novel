@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import csv
+import io
 import os
 import unittest
 from pathlib import Path
+
+from openpyxl import Workbook
 
 from settlement_adapters import REGISTRY, _file_status, adapter_blocking_messages, normalize_settlement, summarize_normalization
 
@@ -38,6 +41,23 @@ class SettlementAdapterRegistryTest(unittest.TestCase):
         spec = REGISTRY["미소설"]
 
         self.assertEqual(_file_status(spec, "2026년 2월 미소설 사람가공 정산상세.xlsx"), "include")
+
+    def test_romantique_does_not_promote_isbn_to_external_id(self) -> None:
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "styleB(바로북)fixture"
+        sheet.append(["도서명", "저자", "판매액", "정산액", "isbn"])
+        sheet.append(["헌터 외 사망 금지 1권", "파인애플덤플링", 3300, 1815, "979-11-7530-702-5"])
+        payload = io.BytesIO()
+        workbook.save(payload)
+        payload.seek(0)
+
+        result = normalize_settlement(payload, platform="로망띠끄", source_name="로망띠끄_fixture.xlsx")
+        feed = result.to_mapping_feed()
+
+        self.assertEqual(len(feed), 1)
+        self.assertEqual(feed["외부콘텐츠ID"].iloc[0], "")
+        self.assertNotIn("979-11-7530-702-5", feed.to_csv(index=False))
 
 
 class SettlementAdapterFixtureTest(unittest.TestCase):

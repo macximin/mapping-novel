@@ -47,6 +47,10 @@ STANDARD_COLUMNS = [
     "s2_gate",
 ]
 
+_PLATFORM_BLOCKED_RAW_COLUMN_KEYWORDS = {
+    "로망띠끄": ("isbn",),
+}
+
 
 @dataclass(frozen=True)
 class AdapterSpec:
@@ -649,6 +653,8 @@ def _standardize(
     if raw.empty:
         return _empty_rows()
 
+    raw = _drop_platform_blocked_raw_columns(raw, spec)
+
     title = _pick_series(raw, spec.title_candidates)
     title_text = title.map(text)
     data_mask = title_text.ne("") & ~title_text.map(_is_non_data_title)
@@ -675,6 +681,22 @@ def _standardize(
     out["amount_rule_status"] = spec.amount_rule_status
     out["s2_gate"] = spec.s2_gate
     return out.reset_index(drop=True)
+
+
+def _drop_platform_blocked_raw_columns(raw: pd.DataFrame, spec: AdapterSpec) -> pd.DataFrame:
+    keywords = _PLATFORM_BLOCKED_RAW_COLUMN_KEYWORDS.get(spec.platform, ())
+    if not keywords:
+        return raw
+
+    blocked = []
+    for column in raw.columns:
+        base = re.sub(r"__\d+$", "", str(column))
+        normalized = _norm(base)
+        if any(keyword in normalized for keyword in keywords):
+            blocked.append(column)
+    if not blocked:
+        return raw
+    return raw.drop(columns=blocked)
 
 
 def _pick_series(df: pd.DataFrame, candidates: Iterable[str]) -> pd.Series:
@@ -770,7 +792,7 @@ _REGISTRY_ROWS = [
     ("구글", "google_transaction_fixed_columns", "special_parser_required", "GoogleSalesTransactionReport", "", "Title", "Author", "Id / Product / Primary ISBN", "Publisher Revenue / Payment Amount 후보", "법인세 차감 후 금액 또는 Publisher Revenue 후보", "미국 원천징수세 / 법인세 차감액 후보", "needs_policy", "Google 금액 기준 확정 + 외화/세금 처리 전 S2 출력 금지"),
     ("네이버", "two_row_merged_header_flatten", "special_parser_required", "contentsSelling_*", "복사본, 중복 통합본은 review gate", "컨텐츠", "작가명", "컨텐츠No / 공급자코드", "합계", "정산금액 있는 그룹만 직접 후보, 그 외 정책 필요", "마켓수수료(추정치) / 유상 이용권 보정", "needs_policy", "2행 헤더 flatten + 통합/선투자 중복 검산 전 S2 출력 금지"),
     ("노벨피아", "single_header", "single_header_policy_gate", "일별 정산", "", "상품명", "작가명", "작품코드", "판매합계 또는 판매금액", "정산금액", "취소금액", "needs_cancel_policy", "취소금액 처리 정책 확정 후 S2 출력"),
-    ("로망띠끄", "single_header_row5_with_merged_banner", "single_header_policy_gate", "styleB(바로북)*", "", "도서명", "저자", "도서코드 / isbn", "판매액", "정산액", "없음 확인 필요", "candidate_confirmed_after_reconcile", "대표월 fixture + 총액 reconcile 후 출력"),
+    ("로망띠끄", "single_header_row5_with_merged_banner", "single_header_policy_gate", "styleB(바로북)*", "", "도서명", "저자", "도서코드", "판매액", "정산액", "없음 확인 필요", "candidate_confirmed_after_reconcile", "대표월 fixture + 총액 reconcile 후 출력"),
     ("리디북스", "wide_single_header_limited_columns", "wide_header_policy_gate", "calculate_1 및 리디 정산상세 시트", "", "제목 / 시리즈명", "저자", "도서 ID / 시리즈 ID / 전자책ISBN10/13", "판매액 + 단권/세트/대여 판매액 후보", "정산액 / 앱마켓 정산대상액 후보", "취소액 / 앱마켓 수수료 / 앱마켓 취소액", "needs_policy", "판매/취소/앱마켓 산식 확정 전 S2 출력 금지"),
     ("모픽", "single_header_variants", "single_header_policy_gate", "작품별정산", "", "작품명", "작가명", "없음", "총 매출액 또는 순 매출액", "정산액", "총 매출액-순 매출액 후보", "needs_policy", "총/순 매출 기준 확정 후 S2 출력"),
     ("무툰", "merged_header_coin_table", "single_header_amount_policy_required", "Sheet", "", "타이틀", "작가", "없음", "합계 / 사용코인 후보", "정산총액 또는 정산금액", "공제수수료 / 취소코인", "needs_coin_policy", "코인-원화 및 취소/공제 기준 확정 전 S2 출력 금지"),
