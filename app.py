@@ -8,7 +8,7 @@ import os
 import subprocess
 import sys
 import zipfile
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -70,6 +70,7 @@ S2_FAST_PAGE_SIZE = "1000000"
 S2_NOVEL_CONTENT_STYLE_CODE = "102"
 S2_PAYMENT_MANAGEMENT_URL = "https://kiss.kld.kr/mst/stmi/pymt-setl"
 S2_DAILY_REFRESH_TIME_LABEL = "매일 10:00"
+KST = timezone(timedelta(hours=9))
 AUTO_PLATFORM_OPTION = "엑셀 파일명으로 자동감지"
 S2_SESSION_USERNAME_KEY = "s2_session_username"
 S2_SESSION_PASSWORD_KEY = "s2_session_password"
@@ -462,6 +463,25 @@ def repo_s2_baseline_updated_at(repo_baseline: dict[str, Any]) -> str:
         if formatted:
             return formatted
     return ""
+
+
+def parse_display_timestamp_date(value: object) -> date | None:
+    raw = text(value)
+    if not raw:
+        return None
+    try:
+        return datetime.strptime(raw[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def s2_usage_status(updated_at: str, row_count: int) -> tuple[str, str]:
+    if row_count <= 0:
+        return "확인 필요", "warn"
+    updated_date = parse_display_timestamp_date(updated_at)
+    if updated_date == datetime.now(KST).date():
+        return "사용 가능", "ok"
+    return "확인 필요", "warn"
 
 
 def s2_source_summary_frame(summary: dict[str, object]) -> pd.DataFrame:
@@ -1024,6 +1044,43 @@ def inject_compact_layout_css() -> None:
             background: #fff7ed;
             color: #9a3412;
         }
+        .sidebar-status-card {
+            background: #f8fafc;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.55rem;
+            margin: 0.25rem 0 0.85rem 0;
+            padding: 0.75rem 0.8rem;
+        }
+        .sidebar-status-label {
+            color: #6b7280;
+            font-size: 0.7rem;
+            line-height: 1.2;
+            margin-bottom: 0.25rem;
+        }
+        .sidebar-status-time {
+            color: #111827;
+            font-size: 1.18rem;
+            font-weight: 760;
+            line-height: 1.2;
+            word-break: keep-all;
+        }
+        .sidebar-status-badge {
+            border-radius: 999px;
+            display: inline-block;
+            font-size: 0.72rem;
+            font-weight: 720;
+            line-height: 1;
+            margin-top: 0.55rem;
+            padding: 0.32rem 0.52rem;
+        }
+        .sidebar-status-ok {
+            background: #ecfdf5;
+            color: #047857;
+        }
+        .sidebar-status-warn {
+            background: #fff7ed;
+            color: #c2410c;
+        }
         div[data-testid="stFileUploader"] {
             min-width: 0;
         }
@@ -1119,6 +1176,21 @@ def render_sidebar_mini_notice(message: str, *, tone: str = "info") -> None:
     )
 
 
+def render_s2_status_card(updated_at: str, usage_label: str, usage_tone: str) -> None:
+    badge_class = "sidebar-status-ok" if usage_tone == "ok" else "sidebar-status-warn"
+    timestamp = html.escape(updated_at or "확인 필요")
+    st.markdown(
+        f"""
+        <div class="sidebar-status-card">
+          <div class="sidebar-status-label">S2 기준 업데이트</div>
+          <div class="sidebar-status-time">{timestamp}</div>
+          <span class="sidebar-status-badge {badge_class}">{html.escape(usage_label)}</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def render_upload_examples() -> None:
     examples = (
         "네이버_장르_2026-02.xlsx",
@@ -1158,78 +1230,25 @@ st.caption("플랫폼별 정산서 엑셀을 S2 기준에 매핑합니다.")
 
 with st.sidebar:
     st.subheader("S2 기준 상태")
-    st.caption("Cloud 앱은 repo에 배포된 S2 지급정산 기준을 사용합니다. S2 직접 조회와 최신화는 사내망 PC의 자동 작업이 수행합니다.")
-    render_sidebar_mini_notice(
-        f"S2 기준은 {S2_DAILY_REFRESH_TIME_LABEL} 자동 최신화됩니다. 최신화가 끝나면 repo에 커밋/푸시되고 Cloud 기준도 그 결과를 사용합니다.",
-        tone="info",
-    )
-    render_sidebar_mini_notice(
-        "작업 전 아래 `S2 기준 업데이트` 시각을 먼저 확인하세요. 시각이 오래됐으면 관리자에게 요청하거나 본문 2번 `S2 기준`에서 수동 파일 업로드를 사용하세요.",
-        tone="warning",
-    )
 
     current_cache = cache_metrics(S2_SOURCE_LOOKUP)
+    repo_baseline = repo_s2_baseline_summary()
+    baseline_updated_at = repo_s2_baseline_updated_at(repo_baseline) if repo_baseline else ""
+    usage_label, usage_tone = s2_usage_status(baseline_updated_at, current_cache["rows"])
+    render_s2_status_card(baseline_updated_at, usage_label, usage_tone)
+
+    if usage_tone != "ok":
+        render_sidebar_mini_notice(
+            "오늘 기준 업데이트가 아니면 관리자에게 요청하거나 본문 2번 `S2 기준`에서 수동 파일을 업로드하세요.",
+            tone="warning",
+        )
+
     cache_cols = st.columns(2)
     cache_cols[0].metric("현재 S2 기준 행", f"{current_cache['rows']:,}")
     cache_cols[1].metric("S2 ID", f"{current_cache['sales_channel_content_id_nonblank']:,}")
     guard_cols = st.columns(2)
     guard_cols[0].metric("누락 guard", f"{lookup_row_count(S2_MISSING_LOOKUP):,}")
     guard_cols[1].metric("청구 guard", f"{lookup_row_count(S2_BILLING_LOOKUP):,}")
-
-    repo_baseline = repo_s2_baseline_summary()
-    baseline_updated_at = ""
-    if repo_baseline:
-        payload = repo_baseline["payload"]
-        summary = repo_baseline["summary"]
-        baseline_updated_at = repo_s2_baseline_updated_at(repo_baseline)
-        if baseline_updated_at:
-            render_sidebar_mini_notice(f"S2 기준 업데이트: {baseline_updated_at}", tone="info")
-        baseline_cols = st.columns(2)
-        baseline_cols[0].metric("Repo S2 기준 행", f"{safe_int(payload.get('s2_lookup_rows')):,}")
-        baseline_cols[1].metric("Repo S2 원천 행", f"{safe_int(payload.get('cache_rows_after')):,}")
-        baseline_date = next(
-            (
-                part
-                for part in Path(repo_baseline["path"]).parts
-                if len(part) == 10 and part[4:5] == "-" and part[7:8] == "-"
-            ),
-            "",
-        )
-        st.caption(
-            f"Repo 기준은 앱 배포 시 기본으로 읽는 S2 데이터입니다."
-            f"{f' 업데이트: {baseline_updated_at}.' if baseline_updated_at else ''}"
-            f"{f' 기준일: {baseline_date}.' if baseline_date else ''} "
-            "매일 자동 최신화 결과가 repo에 반영되어야 Cloud 사용자가 최신 기준을 씁니다."
-        )
-        with st.expander("Repo S2 기준 요약", expanded=False):
-            st.dataframe(s2_source_summary_frame(summary), use_container_width=True, height=220)
-            st.caption(f"요약 파일: {repo_baseline['path']}")
-
-    st.markdown("**자동 최신화 로그**")
-    recent_history = history_frame(5)
-    if not recent_history.empty:
-        latest = recent_history.iloc[0]
-        history_cols = st.columns(2)
-        history_cols[0].metric("최근 상태", str(latest.get("상태", "")))
-        history_cols[1].metric("최근 S2 기준 행", f"{safe_int(latest.get('S2 기준 행')):,}")
-        change_cols = st.columns(3)
-        change_cols[0].metric("신규", f"{safe_int(latest.get('신규')):,}")
-        change_cols[1].metric("삭제", f"{safe_int(latest.get('삭제')):,}")
-        change_cols[2].metric("변경", f"{safe_int(latest.get('변경')):,}")
-        with st.expander("최신화 기록", expanded=False):
-            st.dataframe(recent_history, use_container_width=True, height=180)
-        change_detail = s2_change_detail_frame(latest_s2_refresh_changes(S2_HISTORY_DB, refresh_run_id=safe_int(latest.get("ID")), limit=500))
-        if not change_detail.empty:
-            with st.expander("최근 S2 변경 이력 상세", expanded=False):
-                st.dataframe(change_detail, use_container_width=True, height=260)
-    else:
-        log_rows = [
-            {"항목": "실행 주기", "값": S2_DAILY_REFRESH_TIME_LABEL},
-            {"항목": "실행 위치", "값": "사내망 PC 자동 작업"},
-            {"항목": "최근 기준 반영", "값": baseline_updated_at or "확인 필요"},
-            {"항목": "반영 방식", "값": "S2 JSON 최신화 -> repo 커밋/푸시 -> Cloud 기준 반영"},
-        ]
-        st.dataframe(pd.DataFrame(log_rows), use_container_width=True, hide_index=True, height=176)
 
 
 st.markdown('<div class="workflow-caption">정산서 업로드 -> 판매채널 확인 -> S2 매핑 -> 다운로드</div>', unsafe_allow_html=True)
