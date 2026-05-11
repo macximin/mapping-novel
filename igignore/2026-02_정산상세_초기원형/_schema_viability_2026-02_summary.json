@@ -1,0 +1,14 @@
+{
+  "files": 52,
+  "status_counts": {
+    "schema_pass": 47,
+    "schema_pass_blocked": 5
+  },
+  "schema_pass_total": 52,
+  "schema_failed_total": 0,
+  "missing_adapter_total": 0,
+  "s2_locked_files": 11,
+  "s2_unlocked_files": 41,
+  "total_default_feed_rows": 82957,
+  "output_csv": "C:\\Users\\wjjo\\Desktop\\mapping-novel\\igignore\\2026-02_정산상세_초기원형\\_schema_viability_2026-02_all_files.csv"
+}

@@ -1,0 +1,36 @@
+﻿relative_path,audit_level,status,detected_s2_channel,platform,adapter_status,adapter_blocking,adapter_warning,parsed_rows,feed_rows,s2_filter_before,s2_filter_after,s2_matched,s2_no_match,review_rows,missing_guard_candidates,billing_candidates,duplicate_candidate_keys,transfer_exportable,transfer_rows,transfer_blocked_rows,transfer_blocking_messages,error
+교보\2월\2026년 2월 교보문고 정산상세.xlsx,low,blocked_channel_detection,,,,,,,,,,,,,,,,,,,,파일명에서 실제 S2 판매채널명을 감지하지 못함
+네이버\2월\2026년 2월 네이버 연재 정산상세.xlsx,low,success,네이버_연재,네이버,include,,S2 금액 4컬럼 출력은 아직 잠금 전입니다: 2행 헤더 flatten + 통합/선투자 중복 검산 전 S2 출력 금지,504,504,124717,821,461,42,43,0,0,39,N,0,504,S2 전송자료 출력 차단: 2행 헤더 flatten + 통합/선투자 중복 검산 전 S2 출력 금지 | S2 전송자료 차단 행 504개가 있습니다.,
+네이버\2월\2026년 2월 네이버 장르 정산상세.xlsx,low,success,네이버_장르,네이버,include,,S2 금액 4컬럼 출력은 아직 잠금 전입니다: 2행 헤더 flatten + 통합/선투자 중복 검산 전 S2 출력 금지,497,497,124717,1812,472,25,25,0,0,71,N,0,497,S2 전송자료 출력 차단: 2행 헤더 flatten + 통합/선투자 중복 검산 전 S2 출력 금지 | S2 전송자료 차단 행 497개가 있습니다.,
+네이버\2월\선투자\2026년 2월 네이버 간딴 정산상세.xlsx,low,blocked_channel_detection,,,,,,,,,,,,,,,,,,,,파일명에서 실제 S2 판매채널명을 감지하지 못함
+네이버\2월\선투자\2026년 2월 네이버 김악개 정산상세.xlsx,low,blocked_channel_detection,,,,,,,,,,,,,,,,,,,,파일명에서 실제 S2 판매채널명을 감지하지 못함
+네이버\2월\선투자\2026년 2월 네이버 북홀릭 정산상세.xlsx,low,blocked_channel_detection,,,,,,,,,,,,,,,,,,,,파일명에서 실제 S2 판매채널명을 감지하지 못함
+네이버\2월\선투자\2026년 2월 네이버 선투자 정산상세(통합).xlsx,low,blocked_channel_detection,,,,,,,,,,,,,,,,,,,,파일명에서 실제 S2 판매채널명을 감지하지 못함
+네이버\2월\선투자\2026년 2월 네이버 차라리 정산상세.xlsx,low,blocked_channel_detection,,,,,,,,,,,,,,,,,,,,파일명에서 실제 S2 판매채널명을 감지하지 못함
+네이버\2월\일반\2026년 2월 네이버 일반 정산상세.xlsx,low,success,네이버_일반,네이버,include,,S2 금액 4컬럼 출력은 아직 잠금 전입니다: 2행 헤더 flatten + 통합/선투자 중복 검산 전 S2 출력 금지,2,2,124717,3243,2,0,0,0,0,0,N,0,2,S2 전송자료 출력 차단: 2행 헤더 flatten + 통합/선투자 중복 검산 전 S2 출력 금지 | S2 전송자료 차단 행 2개가 있습니다.,
+네이버\2월\킹묵추가\2026년 2월 네이버 킹묵 정산상세.xlsx,low,blocked_channel_detection,,,,,,,,,,,,,,,,,,,,파일명에서 실제 S2 판매채널명을 감지하지 못함
+노벨피아\2월\2026년 2월 노벨피아 정산상세.xlsx,low,blocked_channel_detection,,,,,,,,,,,,,,,,,,,,파일명에서 실제 S2 판매채널명을 감지하지 못함
+로망띠끄\2월\2026년 2월 로망띠끄 정산상세.xlsx,low,success,로망띠끄,로망띠끄,include,,,61,61,124717,928,60,1,1,0,0,7,N,0,61,S2 전송자료 차단 행 61개가 있습니다.,
+리디북스\2월\2026년 2월 리디북스 정산상세.xlsx,low,blocked_channel_detection,,,,,,,,,,,,,,,,,,,,파일명에서 실제 S2 판매채널명을 감지하지 못함
+모픽\2월\2026년 2월 모픽 정산상세.xlsx,low,blocked_channel_detection,,,,,,,,,,,,,,,,,,,,파일명에서 실제 S2 판매채널명을 감지하지 못함
+미소설\2월\2026년 2월 미소설 정산상세.xlsx,low,success,미소설,미소설,include,,S2 금액 4컬럼 출력은 아직 잠금 전입니다: 지급액 컬럼 선택 기준 확정 후 S2 출력,125,125,124717,697,112,13,13,0,0,16,N,0,125,S2 전송자료 출력 차단: 지급액 컬럼 선택 기준 확정 후 S2 출력 | S2 전송자료 차단 행 125개가 있습니다.,
+미스터블루\2월\2026년 2월 미스터블루 정산상세.xlsx,low,blocked_channel_detection,,,,,,,,,,,,,,,,,,,,파일명에서 실제 S2 판매채널명을 감지하지 못함
+밀리의서재\2월\2026년 2월 밀리의서재 정산상세.xlsx,low,success,밀리의 서재,밀리의서재,include,,,1192,1192,124717,387,1146,46,46,0,0,1,N,0,1192,"S2 전송자료 차단 행 1,192개가 있습니다.",
+부커스\2월\2026년 2월 부커스 정산상세.xlsx,low,success,부커스,부커스,include,,S2 금액 4컬럼 출력은 아직 잠금 전입니다: 판매금액 파생식 확정 전 S2 출력 금지,192,192,124717,306,174,18,18,0,0,3,N,0,192,S2 전송자료 출력 차단: 판매금액 파생식 확정 전 S2 출력 금지 | S2 전송자료 차단 행 192개가 있습니다.,
+북큐브\2월\2026년 2월 북큐브(로맨스) 정산상세.xlsx,low,blocked_channel_detection,,,,,,,,,,,,,,,,,,,,파일명에서 실제 S2 판매채널명을 감지하지 못함
+북큐브\2월\2026년 북큐브(판무) 정산상세.xlsx,low,blocked_channel_detection,,,,,,,,,,,,,,,,,,,,파일명에서 실제 S2 판매채널명을 감지하지 못함
+블라이스\2월\2026년 2월 블라이스 정산상세.xlsx,low,blocked_channel_detection,,,,,,,,,,,,,,,,,,,,파일명에서 실제 S2 판매채널명을 감지하지 못함
+스낵북\2월\2026년 2월 스낵북 정산상세.xlsx,low,blocked_channel_detection,,,,,,,,,,,,,,,,,,,,파일명에서 실제 S2 판매채널명을 감지하지 못함
+알라딘 종이책\2월\2026년 2월 알라딘 종이책 정산상세(날개물류 2월 거래내역).xlsx,low,blocked_channel_detection,,,,,,,,,,,,,,,,,,,,파일명에서 실제 S2 판매채널명을 감지하지 못함
+알라딘 종이책\2월\2026년 2월 알라딘 종이책 정산상세(알라딘 2월 거래내역).xlsx,low,blocked_channel_detection,,,,,,,,,,,,,,,,,,,,파일명에서 실제 S2 판매채널명을 감지하지 못함
+알라딘\2월\2026년 2월 알라딘 정산상세.xlsx,low,blocked_channel_detection,,,,,,,,,,,,,,,,,,,,파일명에서 실제 S2 판매채널명을 감지하지 못함
+에이블리\2월\2026년 2월 에이블리 정산상세.xlsx,low,blocked_channel_detection,,,,,,,,,,,,,,,,,,,,파일명에서 실제 S2 판매채널명을 감지하지 못함
+조아라\2월\로맨스\2026년 2월 조아라 로맨스 단행본 정산상세.xlsx,low,blocked_channel_detection,,,,,,,,,,,,,,,,,,,,파일명에서 실제 S2 판매채널명을 감지하지 못함
+조아라\2월\로맨스\2026년 2월 조아라 로맨스 정산상세.xlsx,low,blocked_channel_detection,,,,,,,,,,,,,,,,,,,,파일명에서 실제 S2 판매채널명을 감지하지 못함
+조아라\2월\판무\2026년 2월 조아라 판무 단행본 정산상세.xlsx,low,blocked_channel_detection,,,,,,,,,,,,,,,,,,,,파일명에서 실제 S2 판매채널명을 감지하지 못함
+조아라\2월\판무\2026년 2월 조아라 판무 정산상세.xlsx,low,blocked_channel_detection,,,,,,,,,,,,,,,,,,,,파일명에서 실제 S2 판매채널명을 감지하지 못함
+조아라\2월\판무\2026년 2월 조아라 판무 후원쿠폰 정산상세.xlsx,low,blocked_channel_detection,,,,,,,,,,,,,,,,,,,,파일명에서 실제 S2 판매채널명을 감지하지 못함
+토스(구루컴퍼니)\2월\2026년 2월 토스 정산상세.xlsx,low,blocked_channel_detection,,,,,,,,,,,,,,,,,,,,파일명에서 실제 S2 판매채널명을 감지하지 못함
+피우리(누온)\2월\2026년 2월 누온(피우리) 정산상세.xlsx,low,success,누온,피우리(누온),include,,,25,25,124717,2376,25,0,0,0,0,4,N,0,25,S2 전송자료 차단 행 25개가 있습니다.,
+피플앤스토리\2월\2026년 2월 피플앤스토리 정산상세.xlsx,low,blocked_channel_detection,,,,,,,,,,,,,,,,,,,,파일명에서 실제 S2 판매채널명을 감지하지 못함
+하이북\2월\2026년 2월 하이북 정산상세.xlsx,low,blocked_channel_detection,,,,,,,,,,,,,,,,,,,,파일명에서 실제 S2 판매채널명을 감지하지 못함

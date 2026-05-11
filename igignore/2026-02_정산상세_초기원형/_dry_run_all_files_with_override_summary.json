@@ -1,0 +1,25 @@
+{
+  "files": 52,
+  "decision_counts": {
+    "selected_by_best_match": 36,
+    "selected_by_filename": 11,
+    "blocked_by_adapter_policy": 5
+  },
+  "status_counts": {
+    "success": 47,
+    "blocked_by_adapter_policy": 5
+  },
+  "success_files": 47,
+  "selected_files": 47,
+  "total_feed_rows": 82957,
+  "total_s2_matched": 75094,
+  "total_s2_no_match": 7861,
+  "total_review_rows": 7863,
+  "total_missing_guard_candidates": 0,
+  "total_billing_candidates": 0,
+  "transfer_exportable_files": 0,
+  "total_transfer_rows": 1035,
+  "total_transfer_blocked_rows": 81922,
+  "override_csv": "C:\\Users\\wjjo\\Desktop\\mapping-novel\\igignore\\2026-02_정산상세_초기원형\\_s2_channel_override_2026-02.csv",
+  "result_csv": "C:\\Users\\wjjo\\Desktop\\mapping-novel\\igignore\\2026-02_정산상세_초기원형\\_dry_run_all_files_with_override.csv"
+}

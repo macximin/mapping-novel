@@ -1,0 +1,18 @@
+{
+  "input_low_files": 35,
+  "status_counts": {
+    "blocked_channel_detection": 27,
+    "success": 8
+  },
+  "success_files": 8,
+  "transfer_exportable_files": 0,
+  "total_feed_rows": 2598,
+  "total_s2_matched": 2452,
+  "total_s2_no_match": 145,
+  "total_review_rows": 146,
+  "total_missing_guard_candidates": 0,
+  "total_billing_candidates": 0,
+  "total_transfer_rows": 0,
+  "total_transfer_blocked_rows": 2598,
+  "output_csv": "C:\\Users\\wjjo\\Desktop\\mapping-novel\\igignore\\2026-02_정산상세_초기원형\\_dry_run_low_files_mapping_result.csv"
+}

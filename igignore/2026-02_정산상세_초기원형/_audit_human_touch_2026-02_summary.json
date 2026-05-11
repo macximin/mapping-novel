@@ -1,0 +1,131 @@
+{
+  "files": 52,
+  "levels": {
+    "low": 35,
+    "high": 8,
+    "medium": 9
+  },
+  "platforms": {
+    "교보": 1,
+    "구글": 1,
+    "네이버": 9,
+    "노벨피아": 1,
+    "로망띠끄": 1,
+    "리디북스": 1,
+    "모픽": 1,
+    "무툰": 1,
+    "문피아": 1,
+    "미소설": 2,
+    "미스터블루": 1,
+    "밀리의서재": 1,
+    "부커스": 1,
+    "북큐브": 2,
+    "북팔": 1,
+    "블라이스": 1,
+    "스낵북": 1,
+    "스토린랩": 1,
+    "알라딘": 1,
+    "알라딘 종이책": 3,
+    "에이블리": 1,
+    "에피루스": 1,
+    "예스24": 1,
+    "올툰": 1,
+    "원스토어": 1,
+    "윌라": 1,
+    "조아라": 5,
+    "카카오": 2,
+    "큐툰": 1,
+    "토스(구루컴퍼니)": 1,
+    "판무림": 1,
+    "피우리(누온)": 1,
+    "피플앤스토리": 1,
+    "하이북": 1,
+    "한아름": 1
+  },
+  "high_files": [
+    {
+      "relative_path": "구글\\2월\\2026년 2월 구글 정산상세(법인세).xlsx",
+      "score": 10,
+      "creator": "User",
+      "last_modified_by": "User",
+      "created": "2026-03-03T06:37:56Z",
+      "modified": "2026-03-03T06:40:27Z",
+      "indicators": "댓글 1파트 | 외부연결/쿼리 1/0/0 | 수식셀 19988"
+    },
+    {
+      "relative_path": "스토린랩\\2월\\2026년 2월 스토린랩 정산상세.xlsx",
+      "score": 10,
+      "creator": "user",
+      "last_modified_by": "User",
+      "created": "2022-01-25T01:20:41Z",
+      "modified": "2026-04-09T05:37:48Z",
+      "indicators": "작성자와 최종수정자 다름(user -> User) | 생성 후 1535.2일 뒤 저장 | 수식셀 9"
+    },
+    {
+      "relative_path": "에피루스\\2월\\2026년 2월 에피루스 정산상세.xlsx",
+      "score": 10,
+      "creator": "user",
+      "last_modified_by": "User",
+      "created": "2026-03-20T06:11:25Z",
+      "modified": "2026-03-23T00:15:46Z",
+      "indicators": "작성자와 최종수정자 다름(user -> User) | 생성 후 2.8일 뒤 저장 | 수식셀 1"
+    },
+    {
+      "relative_path": "올툰\\2월\\2026년 2월 올툰 정산상세.xlsx",
+      "score": 10,
+      "creator": "김성아",
+      "last_modified_by": "김 성아",
+      "created": "2024-04-02T04:19:22Z",
+      "modified": "2026-03-03T06:25:42Z",
+      "indicators": "작성자와 최종수정자 다름(김성아 -> 김 성아) | 생성 후 700.1일 뒤 저장 | 수식셀 6"
+    },
+    {
+      "relative_path": "문피아\\2월\\2026년 2월 문피아 정산상세.xlsx",
+      "score": 9,
+      "creator": "고진숙",
+      "last_modified_by": "User",
+      "created": "2026-03-04T06:23:22Z",
+      "modified": "2026-03-05T01:04:49Z",
+      "indicators": "작성자와 최종수정자 다름(고진숙 -> User) | 생성 후 18.7시간 뒤 저장 | 수식셀 8"
+    },
+    {
+      "relative_path": "원스토어\\2월\\2026년 2월 원스토어 정산상세.xlsx",
+      "score": 8,
+      "creator": "Apache POI",
+      "last_modified_by": "User",
+      "created": "2026-03-20T01:46:37Z",
+      "modified": "2026-03-23T00:11:32Z",
+      "indicators": "작성자와 최종수정자 다름(Apache POI -> User) | 생성 후 2.9일 뒤 저장"
+    },
+    {
+      "relative_path": "윌라\\2월\\2026년 2월 윌라 정산상세.xlsx",
+      "score": 8,
+      "creator": "openpyxl",
+      "last_modified_by": "User",
+      "created": "2026-03-18T02:07:53Z",
+      "modified": "2026-03-23T01:30:39Z",
+      "indicators": "작성자와 최종수정자 다름(openpyxl -> User) | 생성 후 5.0일 뒤 저장"
+    },
+    {
+      "relative_path": "알라딘 종이책\\2월\\2026년 2월 알라딘 종이책 정산상세.xlsx",
+      "score": 7,
+      "creator": "User",
+      "last_modified_by": "임 재경(KSTD)",
+      "created": "2026-03-04T00:06:00Z",
+      "modified": "2026-03-04T01:13:35Z",
+      "indicators": "작성자와 최종수정자 다름(User -> 임 재경(KSTD)) | 생성 후 1.1시간 뒤 저장"
+    }
+  ],
+  "medium_files": [
+    "무툰\\2월\\2026년 2월 무툰 정산상세.xlsx",
+    "미소설\\2월\\2026년 2월 미소설 정산상세_확장체크.xlsx",
+    "북팔\\2월\\2026년 2월 북팔 정산상세.xlsx",
+    "예스24\\2월\\2026월 2월 예스24 정산상세.xlsx",
+    "카카오\\2월\\2026년 2월 카카오페이지(일반) 정산상세.xlsx",
+    "카카오\\선투자\\26년 2월\\2026년 2월 카카오페이지(선투자) 정산상세.xlsx",
+    "큐툰\\2월\\2026년 2월 큐툰 정산상세.xlsx",
+    "판무림\\2월\\2026년 2월 판무림 정산상세.xlsx",
+    "한아름\\2월\\2026년 2월 한아름 정산상세.xlsx"
+  ],
+  "audit_csv": "C:\\Users\\wjjo\\Desktop\\mapping-novel\\igignore\\2026-02_정산상세_초기원형\\_audit_human_touch_2026-02.csv"
+}

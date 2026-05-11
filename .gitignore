@@ -9,6 +9,8 @@ venv/
 .env
 .env.*
 !.env.example
+~$*.xls
+~$*.xlsx
 .tmp_kiss_assets/
 temp/
 ignore/
