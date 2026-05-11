@@ -1253,6 +1253,7 @@ with st.sidebar:
     baseline_updated_at = repo_s2_baseline_updated_at(repo_baseline) if repo_baseline else ""
     usage_label, usage_tone = s2_usage_status(baseline_updated_at, current_cache["rows"])
     render_s2_status_card(baseline_updated_at, usage_label, usage_tone)
+    st.caption("*매일 10시에 정규 업데이트됩니다.")
 
     if usage_tone != "ok":
         render_sidebar_mini_notice(
