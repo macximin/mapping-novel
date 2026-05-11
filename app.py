@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import calendar
 import html
 import io
 import json
@@ -7,7 +8,7 @@ import os
 import subprocess
 import sys
 import zipfile
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -66,6 +67,7 @@ S2_ENV_FILE = ROOT / ".env"
 S2_REFRESH_START_DATE = date(1900, 1, 1)
 S2_FAST_PAGE_SIZE = "1000000"
 S2_NOVEL_CONTENT_STYLE_CODE = "102"
+S2_PAYMENT_MANAGEMENT_URL = "https://kiss.kld.kr/mst/stmi/pymt-setl"
 AUTO_PLATFORM_OPTION = "엑셀 파일명으로 자동감지"
 S2_SESSION_USERNAME_KEY = "s2_session_username"
 S2_SESSION_PASSWORD_KEY = "s2_session_password"
@@ -460,6 +462,33 @@ def safe_int(value: object, default: int = 0) -> int:
         return default
 
 
+def add_months(value: date, months: int) -> date:
+    month_index = value.month - 1 + months
+    year = value.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(value.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day)
+
+
+def admin_s2_refresh_window(month_anchor: date) -> tuple[date, date]:
+    month_start = month_anchor.replace(day=1)
+    previous_month = add_months(month_start, -1)
+    previous_month_last = date(
+        previous_month.year,
+        previous_month.month,
+        calendar.monthrange(previous_month.year, previous_month.month)[1],
+    )
+    return previous_month_last - timedelta(days=7), month_start.replace(day=7)
+
+
+def next_admin_s2_refresh_window(today: date) -> tuple[date, date, bool]:
+    current_start, current_end = admin_s2_refresh_window(today)
+    if today <= current_end:
+        return current_start, current_end, current_start <= today <= current_end
+    next_start, next_end = admin_s2_refresh_window(add_months(today, 1))
+    return next_start, next_end, next_start <= today <= next_end
+
+
 def render_error_detail(exc: Exception) -> None:
     with st.expander("오류 상세", expanded=False):
         st.exception(exc)
@@ -542,7 +571,7 @@ def mapping_readiness_frame(
             {
                 "항목": "S2 기준 데이터",
                 "상태": "정상" if has_s2_source else "필요",
-                "비고": "로컬 기준 또는 수동 S2 기준 사용 가능" if has_s2_source else "S2 기준 전체 교체 또는 수동 업로드가 필요합니다.",
+                "비고": "관리자 배포 기준 또는 수동 S2 기준 사용 가능" if has_s2_source else "관리자에게 최신화를 요청하거나 수동 S2 파일을 업로드하세요.",
             },
             {
                 "항목": "정산서 엑셀 업로드",
@@ -581,7 +610,7 @@ def load_selected_s2_basis(
         return guard_result.frame, label, summarize_payment_settlement(payment_df), guards, guard_result
     if use_payment_cache:
         guard_result = apply_missing_exclusions(pd.read_csv(S2_SOURCE_LOOKUP, dtype=object), guards)
-        label = guarded_s2_source_label("로컬 S2 기준", guards, guard_result)
+        label = guarded_s2_source_label("관리자 배포 S2 기준", guards, guard_result)
         return guard_result.frame, label, None, guards, guard_result
     s2_df, s2_source_label, payment_summary = load_manual_s2_reference(s2_file)
     guard_result = apply_missing_exclusions(s2_df, guards)
@@ -1046,13 +1075,20 @@ st.markdown('<div class="app-title">S2 소설 매핑</div>', unsafe_allow_html=T
 st.caption("플랫폼별 정산서 엑셀을 S2 기준에 매핑합니다.")
 
 with st.sidebar:
-    st.subheader("S2 최신화")
-    sync_browser_s2_id_memory()
-    st.caption(
-        f"전체 교체 방식으로 고정합니다. 조회 범위는 "
-        f"{S2_REFRESH_START_DATE.isoformat()}부터 오늘까지이며, 콘텐츠형태는 소설로 고정합니다."
+    st.subheader("S2 기준 상태")
+    today = date.today()
+    window_start, window_end, in_refresh_window = next_admin_s2_refresh_window(today)
+    st.caption("Cloud 앱은 repo에 배포된 S2 지급정산 기준을 사용합니다. S2 직접 최신화는 관리자가 사내망 로컬에서 수행합니다.")
+    render_sidebar_mini_notice(
+        f"관리자 정기 최신화: 매월 말일 7일 전부터 다음 달 7일까지 매일. "
+        f"{'현재 정기 최신화 창입니다.' if in_refresh_window else f'다음 창은 {window_start.isoformat()}~{window_end.isoformat()}입니다.'}",
+        tone="info",
     )
-    render_sidebar_mini_notice("현재 S2 기준은 서버 메모리에만 반영됩니다.", tone="info")
+    render_sidebar_mini_notice(
+        "오늘 작업해야 하는데 기준이 최신화되어 있으면 그대로 실행하세요. "
+        "최신화가 안 되어 있으면 관리자에게 요청하거나 본문 2번 `S2 기준`에서 수동 파일 업로드를 사용하세요.",
+        tone="warning",
+    )
 
     current_cache = cache_metrics(S2_SOURCE_LOOKUP)
     cache_cols = st.columns(2)
@@ -1062,70 +1098,6 @@ with st.sidebar:
     guard_cols[0].metric("누락 guard", f"{lookup_row_count(S2_MISSING_LOOKUP):,}")
     guard_cols[1].metric("청구 guard", f"{lookup_row_count(S2_BILLING_LOOKUP):,}")
 
-    if "s2_refresh_message" in st.session_state:
-        st.success(st.session_state.pop("s2_refresh_message"))
-    if "s2_refresh_error" in st.session_state:
-        st.error(st.session_state.pop("s2_refresh_error"))
-
-    with st.expander("S2 최신화 로그인", expanded=not has_s2_credentials(s2_runtime_auth_config())):
-        st.caption("S2 최신화에만 사용합니다. 앱은 ID/PW를 파일이나 Secrets에 저장하지 않습니다.")
-        with st.form("s2_session_login_form"):
-            st.text_input("S2 ID", key=S2_SESSION_USERNAME_KEY, autocomplete="username")
-            st.text_input("S2 PW", key=S2_SESSION_PASSWORD_KEY, type="password", autocomplete="current-password")
-            st.checkbox("S2 ID 기억", key=S2_REMEMBER_ID_KEY)
-            auth_submitted = st.form_submit_button("이번 세션에 사용", use_container_width=True)
-        if auth_submitted:
-            if has_s2_credentials(session_s2_login_values()):
-                with st.spinner("S2 로그인 확인 중"):
-                    auth_completed = run_s2_auth_check()
-                if auth_completed.returncode == 0:
-                    st.success("S2 로그인 확인 완료. 이번 세션에서 사용할 수 있습니다.")
-                else:
-                    st.error(s2_refresh_error_message(auth_completed, "로그인 확인"))
-                    st.session_state["s2_refresh_output"] = auth_completed.stderr or auth_completed.stdout
-            else:
-                st.warning("S2 ID와 PW를 모두 입력하세요.")
-        if has_s2_credentials(session_s2_login_values()):
-            st.caption("이번 세션의 S2 ID/PW가 설정되어 있습니다.")
-            if st.button("세션 로그인 지우기", use_container_width=True):
-                st.session_state.pop(S2_SESSION_PASSWORD_KEY, None)
-                if not st.session_state.get(S2_REMEMBER_ID_KEY):
-                    st.session_state.pop(S2_SESSION_USERNAME_KEY, None)
-                st.rerun()
-        if text(s2_id_memory_state().get("saved_id")):
-            if st.button("저장된 S2 ID 지우기", use_container_width=True):
-                clear_browser_s2_id_memory()
-                st.rerun()
-
-    refresh_disabled = not has_s2_credentials(s2_runtime_auth_config())
-    if refresh_disabled:
-        render_sidebar_mini_notice(S2_AUTH_ERROR_MESSAGE, tone="warning")
-    else:
-        st.caption("S2 접속 정보가 설정되어 있습니다.")
-
-    if st.button("S2 기준 전체 교체", disabled=refresh_disabled, use_container_width=True):
-        with st.spinner("S2 로그인 확인 중"):
-            auth_completed = run_s2_auth_check()
-        if auth_completed.returncode != 0:
-            st.session_state["s2_refresh_error"] = s2_refresh_error_message(auth_completed, "로그인 확인")
-            st.session_state["s2_refresh_output"] = auth_completed.stderr or auth_completed.stdout
-            st.rerun()
-
-        with st.spinner("S2 기준 전체 교체 중"):
-            completed, refresh_scope = run_s2_full_replace()
-        if completed.returncode == 0:
-            st.session_state["s2_refresh_message"] = f"S2 기준 전체 교체 완료: {refresh_scope}"
-            st.session_state["s2_refresh_output"] = completed.stdout
-            st.rerun()
-        else:
-            st.session_state["s2_refresh_error"] = s2_refresh_error_message(completed, refresh_scope)
-            st.session_state["s2_refresh_output"] = completed.stderr or completed.stdout
-            st.rerun()
-
-    if "s2_refresh_output" in st.session_state:
-        with st.expander("최신화 실행 로그", expanded=False):
-            st.code(ui_safe_refresh_log(st.session_state["s2_refresh_output"]))
-
     repo_baseline = repo_s2_baseline_summary()
     if repo_baseline:
         payload = repo_baseline["payload"]
@@ -1133,14 +1105,24 @@ with st.sidebar:
         baseline_cols = st.columns(2)
         baseline_cols[0].metric("Repo S2 기준 행", f"{safe_int(payload.get('s2_lookup_rows')):,}")
         baseline_cols[1].metric("Repo S2 원천 행", f"{safe_int(payload.get('cache_rows_after')):,}")
+        baseline_date = next(
+            (
+                part
+                for part in Path(repo_baseline["path"]).parts
+                if len(part) == 10 and part[4:5] == "-" and part[7:8] == "-"
+            ),
+            "",
+        )
         st.caption(
-            "Repo 기준은 앱 배포 시 기본으로 읽는 S2 데이터입니다. "
-            "최신화 기록은 이 서버에서 버튼을 누른 실행 로그입니다."
+            f"Repo 기준은 앱 배포 시 기본으로 읽는 S2 데이터입니다."
+            f"{f' 기준일: {baseline_date}.' if baseline_date else ''} "
+            "관리자 최신화 후 repo에 반영되어야 Cloud 사용자가 최신 기준을 씁니다."
         )
         with st.expander("Repo S2 기준 요약", expanded=False):
             st.dataframe(s2_source_summary_frame(summary), use_container_width=True, height=220)
             st.caption(f"요약 파일: {repo_baseline['path']}")
 
+    st.markdown("**최신화 실행 로그**")
     recent_history = history_frame(5)
     if not recent_history.empty:
         latest = recent_history.iloc[0]
@@ -1158,7 +1140,7 @@ with st.sidebar:
             with st.expander("최근 S2 변경 이력 상세", expanded=False):
                 st.dataframe(change_detail, use_container_width=True, height=260)
     else:
-        st.caption("이 서버에서 실행한 S2 최신화 기록은 아직 없습니다.")
+        st.caption("이 서버에서 직접 실행한 S2 최신화 기록은 아직 없습니다. Cloud에서는 위 Repo 기준일과 행 수를 먼저 확인하세요.")
 
 
 st.markdown('<div class="workflow-caption">정산서 업로드 -> 판매채널 확인 -> S2 매핑 -> 다운로드</div>', unsafe_allow_html=True)
@@ -1208,52 +1190,67 @@ with st.expander("판매채널명 스키마", expanded=False):
     st.dataframe(s2_channel_schema_frame(), use_container_width=True, height=260)
 
 
+ADMIN_S2_SOURCE_OPTION = "관리자 배포 S2 기준 사용"
 s2_source_options = ["수동 S2 파일 업로드"]
 if S2_SOURCE_LOOKUP.exists():
-    s2_source_options.insert(0, "로컬 S2 기준 사용")
+    s2_source_options.insert(0, ADMIN_S2_SOURCE_OPTION)
 s2_file = None
 payment_settlement_file = None
 use_payment_cache = bool(S2_SOURCE_LOOKUP.exists())
 master_df = None
 
 with st.expander("2. S2 기준", expanded=False):
-    st.caption("S2 지급정산 기준만 매핑 기준으로 사용합니다.")
+    st.caption("기본은 관리자가 repo에 배포한 S2 지급정산 기준입니다. 수동 업로드는 최신화가 늦었을 때 쓰는 예외 모드입니다.")
     if S2_SOURCE_LOOKUP.exists():
         s2_source_mode = st.radio("S2 기준", s2_source_options, horizontal=True)
-        use_payment_cache = s2_source_mode == "로컬 S2 기준 사용"
+        use_payment_cache = s2_source_mode == ADMIN_S2_SOURCE_OPTION
         if not use_payment_cache:
-            st.warning("수동 S2 업로드는 예외 모드입니다. 가능한 한 로컬 S2 기준 전체 교체 결과를 사용하세요.")
+            st.warning("수동 S2 업로드는 예외 모드입니다. 오늘 작업에 최신 기준이 필요하면 먼저 관리자에게 S2 최신화를 요청하세요.")
+            st.markdown(
+                f"""
+                - **S2 원천 엑셀**: S2 `[5031] 정산정보(지급)관리`에서 받은 원본 엑셀입니다. 앱이 필요한 기준 컬럼으로 변환합니다.
+                  다운로드 위치: [{S2_PAYMENT_MANAGEMENT_URL}]({S2_PAYMENT_MANAGEMENT_URL})
+                  권장 조건: 조회기간 `{S2_REFRESH_START_DATE.isoformat()}~오늘`, 콘텐츠형태 `소설`.
+                - **S2 기준 리스트**: 이미 `판매채널콘텐츠ID`, `콘텐츠ID`, `콘텐츠명`, `판매채널명` 등이 들어가도록 관리자가 가공한 기준 파일입니다. 일반 사용자는 보통 쓰지 않습니다.
+                """
+            )
             manual_cols = st.columns(2)
             with manual_cols[0]:
                 payment_settlement_file = st.file_uploader(
-                    "S2 원천 엑셀",
+                    "[5031] 정산정보(지급)관리 원천 엑셀",
                     type=["xlsx"],
-                    help="S2에서 받은 원천 엑셀을 앱이 매핑 기준 컬럼으로 변환합니다.",
+                    help="S2 [5031] 정산정보(지급)관리에서 다운로드한 원본 엑셀입니다. 앱이 매핑 기준 컬럼으로 변환합니다.",
                 )
             with manual_cols[1]:
                 s2_file = st.file_uploader(
-                    "S2 기준 리스트",
+                    "관리자 가공 S2 기준 리스트",
                     type=["xlsx"],
-                    help="이미 판매채널콘텐츠ID, 콘텐츠ID, 콘텐츠명을 포함하도록 정리된 S2 기준 파일입니다.",
+                    help="판매채널콘텐츠ID, 콘텐츠ID, 콘텐츠명, 판매채널명이 이미 포함된 관리자 가공 기준 파일입니다.",
                 )
         else:
-            st.caption("로컬 S2 기준을 사용합니다. 최신 데이터가 필요하면 사이드바에서 S2 기준 전체 교체를 실행하세요.")
+            st.caption("관리자가 배포한 S2 기준을 사용합니다. 최신화가 의심되면 관리자에게 기준 갱신을 요청하세요.")
     else:
         use_payment_cache = False
-        st.warning("로컬 S2 기준이 없습니다. 사이드바에서 S2 최신화를 실행하거나 S2 기준 파일을 업로드하세요.")
+        st.warning("관리자 배포 S2 기준이 없습니다. 관리자에게 최신화를 요청하거나 아래 수동 S2 파일을 업로드하세요.")
         manual_cols = st.columns(2)
-        st.warning("수동 S2 업로드는 예외 모드입니다. 가능한 한 사이드바에서 S2 최신화를 먼저 실행하세요.")
+        st.markdown(
+            f"""
+            - **S2 원천 엑셀**: S2 `[5031] 정산정보(지급)관리` 원본 엑셀입니다.
+              다운로드 위치: [{S2_PAYMENT_MANAGEMENT_URL}]({S2_PAYMENT_MANAGEMENT_URL})
+            - **S2 기준 리스트**: 관리자가 가공한 기준 파일입니다. 일반 사용자는 S2 원천 엑셀 쪽이 더 안전합니다.
+            """
+        )
         with manual_cols[0]:
             payment_settlement_file = st.file_uploader(
-                "S2 원천 엑셀",
+                "[5031] 정산정보(지급)관리 원천 엑셀",
                 type=["xlsx"],
-                help="S2에서 받은 원천 엑셀을 앱이 매핑 기준 컬럼으로 변환합니다.",
+                help="S2 [5031] 정산정보(지급)관리에서 다운로드한 원본 엑셀입니다. 앱이 매핑 기준 컬럼으로 변환합니다.",
             )
         with manual_cols[1]:
             s2_file = st.file_uploader(
-                "S2 기준 리스트",
+                "관리자 가공 S2 기준 리스트",
                 type=["xlsx"],
-                help="이미 판매채널콘텐츠ID, 콘텐츠ID, 콘텐츠명을 포함하도록 정리된 S2 기준 파일입니다.",
+                help="판매채널콘텐츠ID, 콘텐츠ID, 콘텐츠명, 판매채널명이 이미 포함된 관리자 가공 기준 파일입니다.",
             )
 
 
