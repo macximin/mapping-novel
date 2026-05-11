@@ -17,7 +17,7 @@ import streamlit as st
 from kiss_refresh_history import latest_refresh_runs, latest_s2_refresh_changes
 from kiss_payment_settlement import load_payment_settlement_list, summarize_payment_settlement, to_s2_lookup
 from cleaning_rules import drop_disabled_rows, text
-from mapping_core import build_mapping, export_mapping, load_master, read_first_sheet
+from mapping_core import build_mapping, export_mapping, read_first_sheet
 from matching_rules import (
     detect_s2_sales_channel,
     filter_s2_by_sales_channel,
@@ -53,7 +53,6 @@ from s2_auth import (
 
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / "data"
-KIDARI_NOVEL_MASTER = DATA_DIR / "kidari_contents.xlsx"
 S2_SOURCE_LOOKUP = DATA_DIR / "kiss_payment_settlement_s2_lookup.csv"
 S2_MISSING_LOOKUP = DATA_DIR / "s2_payment_missing_lookup.csv"
 S2_BILLING_LOOKUP = DATA_DIR / "s2_billing_settlement_lookup.csv"
@@ -124,11 +123,6 @@ S2_ID_MEMORY_COMPONENT = (
     if hasattr(st.components, "v2")
     else None
 )
-
-
-@st.cache_data(show_spinner=False)
-def cached_master(path_text: str) -> pd.DataFrame:
-    return load_master(Path(path_text))
 
 
 def cache_metrics(path: Path) -> dict[str, int]:
@@ -522,8 +516,6 @@ def mapping_readiness_frame(
     has_s2_source: bool,
     all_platforms_ready: bool,
     selected_s2_channel: str,
-    use_ips_aux: bool,
-    master_df: pd.DataFrame | None,
 ) -> pd.DataFrame:
     if selected_s2_channel != AUTO_PLATFORM_OPTION and settlement_file_count:
         channel_status = "직접 선택 적용"
@@ -551,15 +543,6 @@ def mapping_readiness_frame(
                 "비고": f"{settlement_file_count:,}개 업로드됨" if settlement_file_count else "정산서 .xlsx 파일을 1개 이상 업로드하세요.",
             },
             {"항목": "판매채널 감지", "상태": channel_status, "비고": channel_note},
-            {
-                "항목": "IPS 보조 검산",
-                "상태": "사용 중" if master_df is not None else ("확인 필요" if use_ips_aux else "선택 사항"),
-                "비고": (
-                    "IPS 보조 기준 로드 완료"
-                    if master_df is not None
-                    else ("IPS 보조 기준 파일을 확인하세요." if use_ips_aux else "매핑 실행 필수 조건은 아닙니다.")
-                ),
-            },
         ]
     )
 
@@ -1225,9 +1208,9 @@ s2_file = None
 payment_settlement_file = None
 use_payment_cache = bool(S2_SOURCE_LOOKUP.exists())
 master_df = None
-master_error = ""
 
-with st.expander("2. S2 기준 / IPS 보조 검산", expanded=False):
+with st.expander("2. S2 기준", expanded=False):
+    st.caption("S2 지급정산 기준만 매핑 기준으로 사용합니다.")
     if S2_SOURCE_LOOKUP.exists():
         s2_source_mode = st.radio("S2 기준", s2_source_options, horizontal=True)
         use_payment_cache = s2_source_mode == "로컬 S2 기준 사용"
@@ -1266,30 +1249,6 @@ with st.expander("2. S2 기준 / IPS 보조 검산", expanded=False):
                 help="이미 판매채널콘텐츠ID, 콘텐츠ID, 콘텐츠명을 포함하도록 정리된 S2 기준 파일입니다.",
             )
 
-    st.divider()
-    st.markdown("**IPS 보조 검산**")
-    st.caption("선택 검산용입니다. S2 매핑과 S2 전송자료 생성은 S2 기준만 사용합니다.")
-    use_ips_aux = st.checkbox("IPS 보조 검산 사용", value=False)
-    if use_ips_aux and KIDARI_NOVEL_MASTER.exists():
-        try:
-            master_df = cached_master(str(KIDARI_NOVEL_MASTER))
-        except Exception as exc:
-            master_error = str(exc)
-    meta_cols = st.columns(4)
-    if master_df is not None:
-        meta_cols[0].metric("IPS 보조 파일", KIDARI_NOVEL_MASTER.name)
-        meta_cols[1].metric("IPS 보조 행 수", f"{len(master_df):,}")
-    elif master_error:
-        st.warning(f"IPS 기준 파일을 읽지 못했습니다: {master_error}")
-    elif use_ips_aux:
-        meta_cols[0].metric("IPS 보조 검산", "file missing")
-    else:
-        meta_cols[0].metric("IPS 보조 검산", "skipped")
-    if master_df is not None and "귀속법인" in master_df.columns:
-        meta_cols[2].metric("귀속법인", " | ".join(master_df["귀속법인"].dropna().astype(str).unique()[:3]))
-    if master_df is not None and "콘텐츠형태" in master_df.columns:
-        meta_cols[3].metric("콘텐츠형태", " | ".join(master_df["콘텐츠형태"].dropna().astype(str).unique()[:3]))
-
 
 st.subheader("3. 정규화 및 S2 매핑")
 single_output_name = ""
@@ -1308,12 +1267,10 @@ st.dataframe(
         has_s2_source=has_s2_source,
         all_platforms_ready=all_platforms_ready,
         selected_s2_channel=selected_s2_channel,
-        use_ips_aux=use_ips_aux,
-        master_df=master_df,
     ),
     use_container_width=True,
     hide_index=True,
-    height=178,
+    height=142,
 )
 if not can_run:
     st.caption("실행하려면 준비 상태의 `필요` 또는 `확인 필요` 항목을 먼저 처리하세요.")
