@@ -781,6 +781,20 @@ def inject_compact_layout_css() -> None:
     st.markdown(
         """
         <style>
+        :root {
+            --app-font-family: "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", sans-serif;
+        }
+        html,
+        body,
+        .stApp,
+        .stApp *,
+        button,
+        input,
+        textarea,
+        select {
+            font-family: var(--app-font-family) !important;
+            letter-spacing: 0;
+        }
         .block-container {
             padding-top: 3.4rem !important;
             padding-bottom: 1.25rem;
@@ -844,7 +858,6 @@ def inject_compact_layout_css() -> None:
             border-radius: 0.35rem;
             color: #374151;
             display: inline-block;
-            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
             font-size: 0.74rem;
             line-height: 1.2;
             padding: 0.22rem 0.38rem;
