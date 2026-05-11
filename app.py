@@ -488,6 +488,82 @@ def effective_platform_for_file(uploaded_file: object, selected_s2_channel: str)
     return platform_for_s2_sales_channel(s2_channel) or ""
 
 
+def upload_detection_rows(settlement_files: list[object], selected_s2_channel: str) -> tuple[pd.DataFrame, list[str]]:
+    rows: list[dict[str, str]] = []
+    undetected_files: list[str] = []
+    manual_mode = selected_s2_channel != AUTO_PLATFORM_OPTION
+    for uploaded_file in settlement_files:
+        file_name = text(getattr(uploaded_file, "name", ""))
+        filename_detection = detect_s2_sales_channel(file_name)
+        detected_channel = s2_channel_for_file(uploaded_file, selected_s2_channel)
+        effective_platform = effective_platform_for_file(uploaded_file, selected_s2_channel)
+        if not detected_channel or not effective_platform:
+            undetected_files.append(file_name)
+        if manual_mode:
+            status = "직접 선택 적용"
+        elif detected_channel and effective_platform:
+            status = "정상"
+        else:
+            status = "수동 선택 필요"
+        rows.append(
+            {
+                "파일명": file_name,
+                "감지된 판매채널": filename_detection.sales_channel if filename_detection else "감지 실패",
+                "처리 판매채널": detected_channel or "",
+                "상태": status,
+            }
+        )
+    return pd.DataFrame(rows, columns=["파일명", "감지된 판매채널", "처리 판매채널", "상태"]), undetected_files
+
+
+def mapping_readiness_frame(
+    *,
+    settlement_file_count: int,
+    has_s2_source: bool,
+    all_platforms_ready: bool,
+    selected_s2_channel: str,
+    use_ips_aux: bool,
+    master_df: pd.DataFrame | None,
+) -> pd.DataFrame:
+    if selected_s2_channel != AUTO_PLATFORM_OPTION and settlement_file_count:
+        channel_status = "직접 선택 적용"
+        channel_note = selected_s2_channel
+    elif not settlement_file_count:
+        channel_status = "대기 중"
+        channel_note = "정산서를 업로드하면 파일명에서 감지합니다."
+    elif all_platforms_ready:
+        channel_status = "정상"
+        channel_note = "파일명 기반 자동 감지 완료"
+    else:
+        channel_status = "확인 필요"
+        channel_note = "감지 실패 파일은 파일명을 고치거나 판매채널을 직접 선택하세요."
+
+    return pd.DataFrame(
+        [
+            {
+                "항목": "S2 기준 데이터",
+                "상태": "정상" if has_s2_source else "필요",
+                "비고": "로컬 기준 또는 수동 S2 기준 사용 가능" if has_s2_source else "S2 기준 전체 교체 또는 수동 업로드가 필요합니다.",
+            },
+            {
+                "항목": "정산서 엑셀 업로드",
+                "상태": "정상" if settlement_file_count else "필요",
+                "비고": f"{settlement_file_count:,}개 업로드됨" if settlement_file_count else "정산서 .xlsx 파일을 1개 이상 업로드하세요.",
+            },
+            {"항목": "판매채널 감지", "상태": channel_status, "비고": channel_note},
+            {
+                "항목": "IPS 보조 검산",
+                "상태": "사용 중" if master_df is not None else ("확인 필요" if use_ips_aux else "선택 사항"),
+                "비고": (
+                    "IPS 보조 기준 로드 완료"
+                    if master_df is not None
+                    else ("IPS 보조 기준 파일을 확인하세요." if use_ips_aux else "매핑 실행 필수 조건은 아닙니다.")
+                ),
+            },
+        ]
+    )
+
+
 def s2_channel_schema_frame() -> pd.DataFrame:
     rows: list[dict[str, str]] = []
     for s2_channel, platform in sorted(s2_sales_channel_to_platform().items(), key=lambda item: (item[1], item[0])):
@@ -732,14 +808,20 @@ def inject_compact_layout_css() -> None:
         div[data-testid="stAlert"] {
             padding: 0.5rem 0.75rem;
         }
-        .sidebar-mini-warning {
-            background: #fffbe6;
+        .sidebar-mini-notice {
             border-radius: 0.45rem;
-            color: #8a5a00;
             font-size: 0.55rem;
             line-height: 1.35;
             margin: 0.2rem 0 0.45rem 0;
             padding: 0.4rem 0.5rem;
+        }
+        .sidebar-mini-info {
+            background: #eff6ff;
+            color: #1d4ed8;
+        }
+        .sidebar-mini-warning {
+            background: #fff7ed;
+            color: #9a3412;
         }
         div[data-testid="stFileUploader"] {
             min-width: 0;
@@ -748,7 +830,7 @@ def inject_compact_layout_css() -> None:
             margin-bottom: 0.2rem;
         }
         section[data-testid="stFileUploaderDropzone"] {
-            min-height: 2.7rem;
+            min-height: 3.1rem;
             padding: 0.35rem 0.65rem;
             overflow: hidden;
             display: flex;
@@ -760,7 +842,7 @@ def inject_compact_layout_css() -> None:
             background: #ffffff;
         }
         section[data-testid="stFileUploaderDropzone"]::before {
-            content: "📎 여기에 첨부 파일을 끌어 오세요. 또는";
+            content: "정산서 엑셀을 끌어오거나";
             color: #4b5563;
             font-size: 0.88rem;
             pointer-events: none;
@@ -827,8 +909,12 @@ def inject_compact_layout_css() -> None:
     )
 
 
-def render_sidebar_mini_warning(message: str) -> None:
-    st.markdown(f'<div class="sidebar-mini-warning">{html.escape(message)}</div>', unsafe_allow_html=True)
+def render_sidebar_mini_notice(message: str, *, tone: str = "info") -> None:
+    class_name = "sidebar-mini-warning" if tone == "warning" else "sidebar-mini-info"
+    st.markdown(
+        f'<div class="sidebar-mini-notice {class_name}">{html.escape(message)}</div>',
+        unsafe_allow_html=True,
+    )
 
 
 st.set_page_config(page_title="S2 소설 매핑", layout="wide")
@@ -843,7 +929,7 @@ with st.sidebar:
         f"전체 교체 방식으로 고정합니다. 조회 범위는 "
         f"{S2_REFRESH_START_DATE.isoformat()}부터 오늘까지이며, 콘텐츠형태는 소설로 고정합니다."
     )
-    render_sidebar_mini_warning("영구저장이 아니라, 서버에 임시 저장됩니다.")
+    render_sidebar_mini_notice("현재 S2 기준은 서버 메모리에만 반영됩니다.", tone="info")
 
     current_cache = cache_metrics(S2_SOURCE_LOOKUP)
     cache_cols = st.columns(2)
@@ -890,7 +976,7 @@ with st.sidebar:
 
     refresh_disabled = not has_s2_credentials(s2_runtime_auth_config())
     if refresh_disabled:
-        render_sidebar_mini_warning(S2_AUTH_ERROR_MESSAGE)
+        render_sidebar_mini_notice(S2_AUTH_ERROR_MESSAGE, tone="warning")
     else:
         st.caption("S2 접속 정보가 설정되어 있습니다.")
 
@@ -954,10 +1040,24 @@ with st.sidebar:
 
 st.caption("정산서 업로드 -> S2 판매채널명 확인 -> S2 매핑 -> 다운로드")
 
-st.subheader("1. 플랫폼별 정산서 업로드")
+st.subheader("1. 정산서 엑셀 업로드")
+st.caption("여러 플랫폼의 정산서를 한 번에 업로드할 수 있습니다. 지원 파일은 .xlsx입니다.")
+st.markdown(
+    """
+파일명 예시:
+- `네이버_장르_2026-02.xlsx`
+- `카카오페이지(소설)_2026-02.xlsx`
+- `블라이스_일반결제_2026-02.xlsx`
+"""
+)
 upload_cols = st.columns([2, 1])
 with upload_cols[0]:
-    settlement_files = st.file_uploader("플랫폼별 정산서 엑셀 (여러 개 가능)", type=["xlsx"], accept_multiple_files=True)
+    settlement_files = st.file_uploader(
+        "정산서 엑셀 업로드",
+        type=["xlsx"],
+        accept_multiple_files=True,
+        help="파일명에 실제 S2 판매채널명이 들어 있으면 자동감지합니다. 여러 파일을 동시에 올릴 수 있습니다.",
+    )
 with upload_cols[1]:
     s2_channel_options = [AUTO_PLATFORM_OPTION] + sorted(s2_sales_channel_to_platform())
     selected_s2_channel = st.selectbox(
@@ -967,22 +1067,14 @@ with upload_cols[1]:
     )
 
 settlement_files = list(settlement_files or [])
-platform_rows = []
-undetected_files = []
-for uploaded_file in settlement_files:
-    filename_detection = detect_s2_sales_channel(uploaded_file.name)
-    detected_channel = s2_channel_for_file(uploaded_file, selected_s2_channel)
-    effective_platform = effective_platform_for_file(uploaded_file, selected_s2_channel)
-    if not detected_channel or not effective_platform:
-        undetected_files.append(uploaded_file.name)
-    platform_rows.append(
-        {
-            "파일": uploaded_file.name,
-            "파일명 감지": filename_detection.sales_channel if filename_detection else "",
-            "처리 S2 판매채널": detected_channel or "",
-            "처리 어댑터": effective_platform or "파일명 수정 필요",
-        }
-    )
+detection_frame, undetected_files = upload_detection_rows(settlement_files, selected_s2_channel)
+
+upload_state_cols = st.columns(2)
+upload_state_cols[0].metric("업로드된 파일", f"{len(settlement_files):,}개")
+upload_state_cols[1].metric(
+    "판매채널 감지 방식",
+    "파일명 자동 감지" if selected_s2_channel == AUTO_PLATFORM_OPTION else "직접 선택",
+)
 
 if settlement_files:
     if selected_s2_channel != AUTO_PLATFORM_OPTION:
@@ -992,14 +1084,13 @@ if settlement_files:
     elif not undetected_files:
         st.success(f"파일명 기반 S2 판매채널 확인 완료: {len(settlement_files):,}개")
     else:
-        st.warning(
+        st.error(
             f"S2 판매채널명을 감지하지 못한 파일 {len(undetected_files):,}개가 있습니다. "
             + S2_CHANNEL_FILENAME_GUIDE
         )
-    with st.expander("파일별 판매채널", expanded=bool(undetected_files)):
-        st.dataframe(pd.DataFrame(platform_rows), use_container_width=True, height=min(180, 40 + 28 * len(platform_rows)))
+    st.dataframe(detection_frame, use_container_width=True, height=min(260, 45 + 35 * len(detection_frame)))
 else:
-    st.caption(S2_CHANNEL_FILENAME_GUIDE)
+    st.info("정산서 엑셀을 업로드하면 파일별 판매채널 감지 결과가 여기에 표시됩니다.")
 
 with st.expander("판매채널명 스키마", expanded=False):
     st.caption("{S2정산플랫폼}에 넣을 수 있는 전체 목록입니다. 파일명 안에 아래 문자열 중 하나가 들어 있으면 자동감지됩니다.")
@@ -1089,15 +1180,22 @@ elif len(settlement_files) > 1:
 has_s2_source = s2_file is not None or payment_settlement_file is not None or use_payment_cache
 all_platforms_ready = selected_s2_channel != AUTO_PLATFORM_OPTION or not undetected_files
 can_run = bool(settlement_files) and has_s2_source and all_platforms_ready
+st.markdown("**매핑 실행 준비 상태**")
+st.dataframe(
+    mapping_readiness_frame(
+        settlement_file_count=len(settlement_files),
+        has_s2_source=has_s2_source,
+        all_platforms_ready=all_platforms_ready,
+        selected_s2_channel=selected_s2_channel,
+        use_ips_aux=use_ips_aux,
+        master_df=master_df,
+    ),
+    use_container_width=True,
+    hide_index=True,
+    height=178,
+)
 if not can_run:
-    missing: list[str] = []
-    if not settlement_files:
-        missing.append("플랫폼별 정산서 엑셀")
-    if not has_s2_source:
-        missing.append("S2 기준")
-    if settlement_files and not all_platforms_ready:
-        missing.append("파일명 내 S2 판매채널명")
-    st.warning(" / ".join(missing) + "이 필요합니다.")
+    st.caption("실행하려면 준비 상태의 `필요` 또는 `확인 필요` 항목을 먼저 처리하세요.")
 
 run_clicked = st.button("어댑터 정규화 및 S2 매핑 실행", type="primary", disabled=not can_run)
 if not run_clicked:
