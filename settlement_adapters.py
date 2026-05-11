@@ -6,6 +6,7 @@ import re
 import unicodedata
 import zipfile
 from dataclasses import dataclass
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, BinaryIO, Iterable
 from xml.etree import ElementTree as ET
@@ -49,6 +50,17 @@ STANDARD_COLUMNS = [
 
 _PLATFORM_BLOCKED_RAW_COLUMN_KEYWORDS = {
     "로망띠끄": ("isbn",),
+}
+
+_PLATFORM_DATE_TITLE_REPAIRS = {
+    "네이버": (
+        {
+            "author": "이내리",
+            "month": 7,
+            "day": 24,
+            "title": "24/7",
+        },
+    ),
 }
 
 
@@ -663,6 +675,8 @@ def _standardize(
         return _empty_rows()
 
     title = _pick_series(data, spec.title_candidates)
+    author = _pick_series(data, spec.author_candidates)
+    title = _repair_date_like_titles(title, author, spec)
     out = pd.DataFrame(index=data.index)
     out["platform"] = spec.platform
     out["source_file"] = source_name
@@ -671,7 +685,7 @@ def _standardize(
     out["file_status"] = file_status
     out["row_status"] = "data"
     out[STANDARD_TITLE_COLUMN] = title.map(text)
-    out["작가명"] = _pick_series(data, spec.author_candidates).map(text)
+    out["작가명"] = author.map(text)
     out["외부콘텐츠ID"] = _pick_series(data, spec.external_id_candidates).map(text)
     out["판매금액_후보"] = _pick_series(data, spec.sale_amount_candidates).map(_number_or_blank)
     out["정산기준액_후보"] = _pick_series(data, spec.settlement_amount_candidates).map(_number_or_blank)
@@ -697,6 +711,48 @@ def _drop_platform_blocked_raw_columns(raw: pd.DataFrame, spec: AdapterSpec) -> 
     if not blocked:
         return raw
     return raw.drop(columns=blocked)
+
+
+def _repair_date_like_titles(title: pd.Series, author: pd.Series, spec: AdapterSpec) -> pd.Series:
+    repairs = _PLATFORM_DATE_TITLE_REPAIRS.get(spec.platform, ())
+    if not repairs:
+        return title
+
+    repaired = title.astype(object).copy()
+    normalized_authors = author.map(lambda value: _norm(text(value)))
+    for idx, value in title.items():
+        parsed_date = _coerce_date_like(value)
+        if parsed_date is None:
+            continue
+        author_key = normalized_authors.get(idx, "")
+        for repair in repairs:
+            if (
+                parsed_date.month == repair["month"]
+                and parsed_date.day == repair["day"]
+                and author_key == _norm(repair["author"])
+            ):
+                repaired.at[idx] = repair["title"]
+                break
+    return repaired
+
+
+def _coerce_date_like(value: Any) -> date | None:
+    if isinstance(value, pd.Timestamp):
+        if pd.isna(value):
+            return None
+        return value.date()
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+
+    value_text = text(value)
+    if not re.fullmatch(r"\d{4}[-/.]\d{1,2}[-/.]\d{1,2}(?:\s+00:00:00)?", value_text):
+        return None
+    parsed = pd.to_datetime(value_text, errors="coerce")
+    if pd.isna(parsed):
+        return None
+    return parsed.date()
 
 
 def _pick_series(df: pd.DataFrame, candidates: Iterable[str]) -> pd.Series:

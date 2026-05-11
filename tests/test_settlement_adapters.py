@@ -4,6 +4,7 @@ import csv
 import io
 import os
 import unittest
+from datetime import datetime
 from pathlib import Path
 
 from openpyxl import Workbook
@@ -58,6 +59,23 @@ class SettlementAdapterRegistryTest(unittest.TestCase):
         self.assertEqual(len(feed), 1)
         self.assertEqual(feed["외부콘텐츠ID"].iloc[0], "")
         self.assertNotIn("979-11-7530-702-5", feed.to_csv(index=False))
+
+    def test_naver_repairs_24_7_when_excel_coerces_title_to_date(self) -> None:
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "contentsSelling_fixture"
+        sheet.append(["컨텐츠", "작가명", "공급자코드", "합계", "정산금액", "마켓수수료"])
+        sheet.append([datetime(2026, 7, 24), "이내리", "NV-247", 1000, 700, 300])
+        payload = io.BytesIO()
+        workbook.save(payload)
+        payload.seek(0)
+
+        result = normalize_settlement(payload, platform="네이버", source_name="네이버_연재_fixture.xlsx")
+        feed = result.to_mapping_feed()
+
+        self.assertEqual(len(feed), 1)
+        self.assertEqual(feed["상품명"].iloc[0], "24/7")
+        self.assertEqual(result.rows["정제_상품명"].iloc[0], "24/7")
 
 
 class SettlementAdapterFixtureTest(unittest.TestCase):
