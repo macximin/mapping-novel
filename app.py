@@ -15,6 +15,7 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
+from batch_reports import build_combined_mapping_report_frame, build_pd_work_order_report_frame
 from kiss_refresh_history import latest_refresh_runs, latest_s2_refresh_changes
 from kiss_payment_settlement import load_payment_settlement_list, summarize_payment_settlement, to_s2_lookup
 from cleaning_rules import drop_disabled_rows, text
@@ -838,13 +839,30 @@ def unique_archive_name(name: str, used_names: set[str]) -> str:
     return candidate
 
 
-def build_batch_zip(results: list[dict[str, Any]], summary_frame: pd.DataFrame) -> bytes:
+def build_batch_zip(
+    results: list[dict[str, Any]],
+    summary_frame: pd.DataFrame,
+    work_order_frame: pd.DataFrame | None = None,
+    combined_report_frame: pd.DataFrame | None = None,
+) -> bytes:
     buffer = io.BytesIO()
     used_names: set[str] = set()
+    work_order_frame = work_order_frame if work_order_frame is not None else build_pd_work_order_report_frame(results)
+    combined_report_frame = (
+        combined_report_frame if combined_report_frame is not None else build_combined_mapping_report_frame(results)
+    )
     with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
         archive.writestr(
             unique_archive_name("batch_summary.csv", used_names),
             summary_frame.to_csv(index=False).encode("utf-8-sig"),
+        )
+        archive.writestr(
+            unique_archive_name("PD_작업지시_종합리포트.csv", used_names),
+            work_order_frame.to_csv(index=False).encode("utf-8-sig"),
+        )
+        archive.writestr(
+            unique_archive_name("전체_행별매핑_종합.csv", used_names),
+            combined_report_frame.to_csv(index=False).encode("utf-8-sig"),
         )
         for result in results:
             output_stem = text(result.get("output_stem")) or default_mapping_stem(result.get("source_name", "mapping_result"))
@@ -1418,6 +1436,8 @@ if payment_summary is not None:
 
 st.subheader("처리 결과")
 summary_frame = batch_summary_frame(results)
+work_order_frame = build_pd_work_order_report_frame(results)
+combined_report_frame = build_combined_mapping_report_frame(results)
 status_counts = summary_frame["상태"].value_counts().to_dict() if not summary_frame.empty else {}
 batch_cols = st.columns(4)
 batch_cols[0].metric("전체 파일", f"{len(results):,}")
@@ -1426,10 +1446,38 @@ batch_cols[2].metric("차단", f"{safe_int(status_counts.get('blocked')):,}")
 batch_cols[3].metric("실패", f"{safe_int(status_counts.get('failed')):,}")
 st.dataframe(summary_frame, use_container_width=True, height=min(360, 45 + 35 * max(len(summary_frame), 1)))
 
+st.subheader("종합 리포트")
+report_cols = st.columns(3)
+report_cols[0].metric("PD 작업지시 행", f"{len(work_order_frame):,}")
+report_cols[1].metric("전체 행별매핑 행", f"{len(combined_report_frame):,}")
+report_cols[2].metric("검토필요 원천 행", f"{safe_int(combined_report_frame['검토필요(Y/N)'].map(text).eq('Y').sum() if not combined_report_frame.empty else 0):,}")
+st.caption("PD 작업지시 종합리포트는 검토필요 행만 제목 기준으로 묶은 표입니다. 구글시트에 그대로 붙여서 담당자/메모를 채우면 됩니다.")
+if work_order_frame.empty:
+    st.success("PD에게 별도 작업 요청할 검토필요 행이 없습니다.")
+else:
+    st.dataframe(work_order_frame, use_container_width=True, height=min(420, 45 + 35 * max(len(work_order_frame), 1)))
+download_report_cols = st.columns(2)
+with download_report_cols[0]:
+    st.download_button(
+        "PD 작업지시 종합리포트 CSV",
+        work_order_frame.to_csv(index=False).encode("utf-8-sig"),
+        file_name="PD_작업지시_종합리포트.csv",
+        mime="text/csv",
+        disabled=work_order_frame.empty,
+    )
+with download_report_cols[1]:
+    st.download_button(
+        "전체 행별매핑 종합 CSV",
+        combined_report_frame.to_csv(index=False).encode("utf-8-sig"),
+        file_name="전체_행별매핑_종합.csv",
+        mime="text/csv",
+        disabled=combined_report_frame.empty,
+    )
+
 zip_name = f"mapping_results_{datetime.now().strftime('%Y%m%d_%H%M')}.zip"
 st.download_button(
     "전체 결과 ZIP 다운로드",
-    build_batch_zip(results, summary_frame),
+    build_batch_zip(results, summary_frame, work_order_frame, combined_report_frame),
     file_name=zip_name,
     mime="application/zip",
     disabled=not results,
