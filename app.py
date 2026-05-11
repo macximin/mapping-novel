@@ -795,6 +795,21 @@ def inject_compact_layout_css() -> None:
             font-family: var(--app-font-family) !important;
             letter-spacing: 0;
         }
+        [data-testid="stIconMaterial"] {
+            direction: ltr;
+            display: inline-block;
+            font-family: "Material Symbols Rounded" !important;
+            font-feature-settings: "liga";
+            font-style: normal;
+            font-weight: 400;
+            letter-spacing: normal;
+            line-height: 1;
+            text-transform: none;
+            white-space: nowrap;
+            word-wrap: normal;
+            -webkit-font-feature-settings: "liga";
+            -webkit-font-smoothing: antialiased;
+        }
         .block-container {
             padding-top: 3.4rem !important;
             padding-bottom: 1.25rem;
