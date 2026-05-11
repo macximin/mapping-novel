@@ -1581,6 +1581,7 @@ with report_download_cols[0]:
         mapping_state["work_order_csv_bytes"],
         file_name="PD_작업지시_종합리포트.csv",
         mime="text/csv",
+        on_click="ignore",
         disabled=bool(mapping_state.get("work_order_empty")),
     )
 with report_download_cols[1]:
@@ -1589,6 +1590,7 @@ with report_download_cols[1]:
         mapping_state["combined_csv_bytes"],
         file_name="전체_행별매핑_종합.csv",
         mime="text/csv",
+        on_click="ignore",
         disabled=bool(mapping_state.get("combined_report_empty")),
     )
 
@@ -1597,5 +1599,6 @@ st.download_button(
     mapping_state["zip_bytes"],
     file_name=mapping_state["zip_name"],
     mime="application/zip",
+    on_click="ignore",
     disabled=summary_frame.empty,
 )
