@@ -1008,6 +1008,7 @@ def inject_compact_layout_css() -> None:
             background: #f9fafb;
             border: 1px solid #e5e7eb;
             border-radius: 0.45rem;
+            min-height: 3.6rem;
             padding: 0.55rem 0.7rem;
         }
         .upload-status-label {
@@ -1088,8 +1089,8 @@ def inject_compact_layout_css() -> None:
             margin-bottom: 0.2rem;
         }
         section[data-testid="stFileUploaderDropzone"] {
-            min-height: 3rem;
-            padding: 0.35rem 0.7rem;
+            min-height: 4.35rem;
+            padding: 0.65rem 0.9rem;
             overflow: hidden;
             display: flex;
             align-items: center;
@@ -1103,7 +1104,7 @@ def inject_compact_layout_css() -> None:
         section[data-testid="stFileUploaderDropzone"]::before {
             content: "정산서 엑셀 끌어오기";
             color: #4b5563;
-            font-size: 0.82rem;
+            font-size: 0.86rem;
             pointer-events: none;
         }
         section[data-testid="stFileUploaderDropzone"] > div {
@@ -1156,6 +1157,25 @@ def inject_compact_layout_css() -> None:
             max-height: 6.25rem;
             overflow: auto;
         }
+        .upload-reset-caption {
+            color: #6b7280;
+            font-size: 0.78rem;
+            line-height: 1.35;
+            margin: -0.15rem 0 0.65rem 0;
+            white-space: nowrap;
+        }
+        .upload-reset-spacer {
+            height: 0.72rem;
+        }
+        @media (max-width: 760px) {
+            .upload-reset-caption {
+                line-height: 1.35;
+                white-space: normal;
+            }
+            .upload-reset-spacer {
+                height: 0;
+            }
+        }
         div[data-testid="stExpander"] details {
             padding-top: 0.15rem;
         }
@@ -1204,19 +1224,16 @@ def render_upload_examples() -> None:
     )
 
 
-def render_upload_status_strip(file_count: int, selected_s2_channel: str) -> None:
-    mode = "파일명 자동 감지" if selected_s2_channel == AUTO_PLATFORM_OPTION else f"직접 선택: {selected_s2_channel}"
+def upload_detection_mode_label(selected_s2_channel: str) -> str:
+    return "파일명 자동 감지" if selected_s2_channel == AUTO_PLATFORM_OPTION else f"직접 선택: {selected_s2_channel}"
+
+
+def render_upload_status_card(label: str, value: str) -> None:
     st.markdown(
         f"""
-        <div class="upload-status-strip">
-          <div class="upload-status-item">
-            <span class="upload-status-label">업로드된 파일</span>
-            <span class="upload-status-value">{file_count:,}개</span>
-          </div>
-          <div class="upload-status-item">
-            <span class="upload-status-label">판매채널 감지</span>
-            <span class="upload-status-value">{html.escape(mode)}</span>
-          </div>
+        <div class="upload-status-item">
+          <span class="upload-status-label">{html.escape(label)}</span>
+          <span class="upload-status-value">{html.escape(value)}</span>
         </div>
         """,
         unsafe_allow_html=True,
@@ -1278,15 +1295,22 @@ with upload_cols[1]:
 settlement_files = list(settlement_files or [])
 detection_frame, undetected_files = upload_detection_rows(settlement_files, selected_s2_channel)
 
-render_upload_status_strip(len(settlement_files), selected_s2_channel)
-reset_cols = st.columns([0.35, 1.65])
-with reset_cols[0]:
+status_cols = st.columns([1, 1, 0.18])
+with status_cols[0]:
+    render_upload_status_card("업로드된 파일", f"{len(settlement_files):,}개")
+with status_cols[1]:
+    render_upload_status_card("판매채널 감지", upload_detection_mode_label(selected_s2_channel))
+with status_cols[2]:
+    st.markdown('<div class="upload-reset-spacer"></div>', unsafe_allow_html=True)
     reset_upload_clicked = st.button(
-        "목록 리셋",
+        "리셋",
         help="잘못 올린 파일이나 현재 업로드 목록을 모두 비웁니다.",
+        key="reset_settlement_uploads",
     )
-with reset_cols[1]:
-    st.caption("CSV/JSON 등 잘못 들어간 파일이 보이면 `목록 리셋` 후 .xlsx만 다시 올리세요.")
+st.markdown(
+    '<div class="upload-reset-caption">잘못 들어간 파일이 보이면 리셋 후 .xlsx만 다시 올리세요.</div>',
+    unsafe_allow_html=True,
+)
 if reset_upload_clicked:
     st.session_state[SETTLEMENT_UPLOAD_RESET_COUNTER_KEY] = safe_int(
         st.session_state.get(SETTLEMENT_UPLOAD_RESET_COUNTER_KEY)
