@@ -1490,6 +1490,24 @@ batch_cols[2].metric("차단", f"{safe_int(status_counts.get('blocked')):,}")
 batch_cols[3].metric("실패", f"{safe_int(status_counts.get('failed')):,}")
 st.dataframe(summary_frame, use_container_width=True, height=min(360, 45 + 35 * max(len(summary_frame), 1)))
 
+report_download_cols = st.columns(2)
+with report_download_cols[0]:
+    st.download_button(
+        "PD 작업지시 CSV 다운로드",
+        work_order_frame.to_csv(index=False).encode("utf-8-sig"),
+        file_name="PD_작업지시_종합리포트.csv",
+        mime="text/csv",
+        disabled=work_order_frame.empty,
+    )
+with report_download_cols[1]:
+    st.download_button(
+        "전체 행별매핑 CSV 다운로드",
+        combined_report_frame.to_csv(index=False).encode("utf-8-sig"),
+        file_name="전체_행별매핑_종합.csv",
+        mime="text/csv",
+        disabled=combined_report_frame.empty,
+    )
+
 zip_name = f"mapping_results_{datetime.now().strftime('%Y%m%d_%H%M')}.zip"
 st.download_button(
     "전체 결과 ZIP 다운로드",
