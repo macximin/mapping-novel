@@ -43,8 +43,10 @@ from s2_reference_guards import (
 from s2_auth import (
     S2_AUTH_ERROR_MESSAGE,
     S2_AUTH_FAILURE_HINT,
+    S2_NETWORK_FAILURE_HINT,
     has_s2_credentials,
     looks_like_s2_auth_failure,
+    looks_like_s2_network_failure,
     normalize_s2_login_values,
     normalize_s2_secret_values,
     read_env_file,
@@ -277,10 +279,15 @@ def run_s2_full_replace() -> tuple[subprocess.CompletedProcess[str], str]:
 
 def s2_refresh_error_message(completed: subprocess.CompletedProcess[str], refresh_scope: str) -> str:
     output = f"{completed.stdout}\n{completed.stderr}"
+    detail = " ".join(str(output or "").split())[:300]
+    if looks_like_s2_network_failure(output):
+        message = f"{S2_NETWORK_FAILURE_HINT} API 다운로드를 시작하지 않았습니다. ({refresh_scope})"
+        if detail:
+            return f"{message} 원인 로그: {detail}"
+        return message
     if looks_like_s2_auth_failure(output):
         return f"{S2_AUTH_FAILURE_HINT} API 다운로드를 진행하지 못했습니다. ({refresh_scope})"
     if refresh_scope == "로그인 확인":
-        detail = " ".join(str(output or "").split())[:300]
         if detail:
             return f"S2 로그인 확인 실패: API 다운로드를 시작하지 않았습니다. ({refresh_scope}) 원인 로그: {detail}"
         return f"S2 로그인 확인 실패: API 다운로드를 시작하지 않았습니다. ({refresh_scope})"

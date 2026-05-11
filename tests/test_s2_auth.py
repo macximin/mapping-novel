@@ -12,6 +12,7 @@ from s2_auth import (
     apply_env_file,
     has_s2_credentials,
     looks_like_s2_auth_failure,
+    looks_like_s2_network_failure,
     normalize_s2_login_values,
     normalize_s2_secret_values,
     read_env_file,
@@ -218,6 +219,16 @@ class S2AuthTest(unittest.TestCase):
 
         self.assertIn("S2 인증 실패", str(caught.exception))
         self.assertTrue(looks_like_s2_auth_failure(str(caught.exception)))
+
+    def test_connect_timeout_is_network_failure_not_auth_failure(self) -> None:
+        output = (
+            "S2 인증 확인 실패: HTTPSConnectionPool(host='s2-api.kld.kr', port=443): "
+            "Max retries exceeded with url: /user/login "
+            "(Caused by ConnectTimeoutError(..., 'Connection to s2-api.kld.kr timed out. (connect timeout=10)'))"
+        )
+
+        self.assertTrue(looks_like_s2_network_failure(output))
+        self.assertFalse(looks_like_s2_auth_failure(output))
 
 
 class FakeResponse:

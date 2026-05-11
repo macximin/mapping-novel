@@ -17,11 +17,15 @@ SECTION_ACCESS_TOKEN_KEYS = ("access_token", "token", "bearer_token")
 
 S2_AUTH_ERROR_MESSAGE = (
     "S2 ID/PW를 입력하거나, 수동으로 플랫폼별 정산정보를 입력하세요. "
-    "실패 시 ID/PW를 다시 확인하세요."
+    "실패 시 ID/PW와 S2 API 네트워크 접근 가능 여부를 확인하세요."
 )
 S2_AUTH_FAILURE_HINT = (
     "S2 로그인 실패: S2 ID/PW가 틀렸거나 S2 API가 인증을 거부했습니다. "
     "입력값을 확인하세요."
+)
+S2_NETWORK_FAILURE_HINT = (
+    "S2 API 접속 실패: 현재 서버에서 S2 API에 연결하지 못했습니다. "
+    "ID/PW 문제가 아니라 네트워크, VPN, 방화벽 또는 IP 허용 목록 제한일 가능성이 큽니다."
 )
 S2_AUTH_FAILURE_TOKENS = (
     "s2 로그인 실패",
@@ -33,6 +37,19 @@ S2_AUTH_FAILURE_TOKENS = (
     "forbidden",
     "invalid credentials",
     "invalid token",
+)
+S2_NETWORK_FAILURE_TOKENS = (
+    "connecttimeouterror",
+    "readtimeouterror",
+    "connect timeout",
+    "read timeout",
+    "timed out",
+    "max retries exceeded",
+    "failed to establish a new connection",
+    "connection refused",
+    "network is unreachable",
+    "name resolution",
+    "temporary failure in name resolution",
 )
 
 
@@ -84,6 +101,11 @@ def has_s2_credentials(config: dict[str, Any]) -> bool:
 def looks_like_s2_auth_failure(raw_text: object) -> bool:
     normalized = str(raw_text or "").lower()
     return any(token in normalized for token in S2_AUTH_FAILURE_TOKENS)
+
+
+def looks_like_s2_network_failure(raw_text: object) -> bool:
+    normalized = str(raw_text or "").lower()
+    return any(token in normalized for token in S2_NETWORK_FAILURE_TOKENS)
 
 
 def normalize_s2_login_values(username: object, password: object) -> dict[str, str]:
