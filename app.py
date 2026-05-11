@@ -1434,8 +1434,9 @@ if not run_clicked:
 
 try:
     results: list[dict[str, Any]] = []
-    with st.status("S2 기준과 정산서 엑셀을 처리하는 중", expanded=True) as status:
-        st.write("S2 기준 불러오는 중")
+    progress_slot = st.empty()
+    with st.spinner("S2 기준과 정산서 엑셀을 처리하는 중..."):
+        progress_slot.caption("S2 기준 불러오는 중")
         s2_df, s2_source_label, payment_summary, s2_guards, s2_guard_filter = load_selected_s2_basis(
             use_payment_cache=use_payment_cache,
             payment_settlement_file=payment_settlement_file,
@@ -1443,7 +1444,7 @@ try:
         )
 
         for idx, settlement_file in enumerate(settlement_files, start=1):
-            st.write(f"{idx:,}/{len(settlement_files):,} 처리 중: {settlement_file.name}")
+            progress_slot.caption(f"{idx:,}/{len(settlement_files):,} 처리 중: {settlement_file.name}")
             if len(settlement_files) == 1:
                 raw_output_stem = single_output_name or default_mapping_stem(settlement_file)
             else:
@@ -1460,8 +1461,10 @@ try:
                     output_stem=output_stem,
                 )
             )
-        status.update(label="처리 완료", state="complete")
+    progress_slot.empty()
 except Exception as exc:
+    if "progress_slot" in locals():
+        progress_slot.empty()
     st.error("S2 기준 또는 입력 파일을 처리하지 못했습니다.")
     render_error_detail(exc)
     st.stop()
