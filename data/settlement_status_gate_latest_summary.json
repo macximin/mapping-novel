@@ -1,0 +1,74 @@
+{
+  "as_of": "2026-05-09",
+  "judgement_csv": "C:\\Users\\User\\Desktop\\mapping-novel\\판매채널-지급정산 불일치\\05_불일치_판정\\20260509\\판매채널콘텐츠_vs_지급정산관리_전체판정.csv",
+  "ips": "C:\\Users\\User\\Desktop\\mapping-novel\\data\\kidari_contents.xlsx",
+  "output": "data\\settlement_status_gate_latest.csv",
+  "overall": {
+    "rows": 98113,
+    "sales_channel_content_ids": 98113,
+    "missing_payment_settlement": 4710,
+    "ab_checklist": 1373,
+    "mixed_risk": 351,
+    "mixed_content_ids": 127,
+    "status_counts": {
+      "OK_PAYMENT_SETTLEMENT_EXISTS": 93403,
+      "BLOCK_DISABLED_MARKER": 3337,
+      "HOLD_NO_PAYMENT_SETTLEMENT": 1022,
+      "HOLD_MIXED_CONTENT_RISK": 351
+    }
+  },
+  "core_novel_departments": {
+    "departments": [
+      "소설1팀",
+      "소설2팀",
+      "소설편집팀",
+      "소설유통팀",
+      "소설사업부"
+    ],
+    "content_shape": "소설",
+    "rows": 83233,
+    "sales_channel_content_ids": 83233,
+    "missing_payment_settlement": 3647,
+    "ab_checklist": 381,
+    "mixed_risk": 261,
+    "mixed_content_ids": 102,
+    "status_counts": {
+      "OK_PAYMENT_SETTLEMENT_EXISTS": 79586,
+      "BLOCK_DISABLED_MARKER": 3266,
+      "HOLD_MIXED_CONTENT_RISK": 261,
+      "HOLD_NO_PAYMENT_SETTLEMENT": 120
+    },
+    "status_by_department": {
+      "소설2팀": {
+        "BLOCK_DISABLED_MARKER": 86,
+        "HOLD_MIXED_CONTENT_RISK": 12,
+        "HOLD_NO_PAYMENT_SETTLEMENT": 0,
+        "OK_PAYMENT_SETTLEMENT_EXISTS": 4073
+      },
+      "소설사업부": {
+        "BLOCK_DISABLED_MARKER": 9,
+        "HOLD_MIXED_CONTENT_RISK": 0,
+        "HOLD_NO_PAYMENT_SETTLEMENT": 0,
+        "OK_PAYMENT_SETTLEMENT_EXISTS": 184
+      },
+      "소설유통팀": {
+        "BLOCK_DISABLED_MARKER": 378,
+        "HOLD_MIXED_CONTENT_RISK": 46,
+        "HOLD_NO_PAYMENT_SETTLEMENT": 0,
+        "OK_PAYMENT_SETTLEMENT_EXISTS": 51750
+      },
+      "소설편집팀": {
+        "BLOCK_DISABLED_MARKER": 2793,
+        "HOLD_MIXED_CONTENT_RISK": 203,
+        "HOLD_NO_PAYMENT_SETTLEMENT": 120,
+        "OK_PAYMENT_SETTLEMENT_EXISTS": 23579
+      },
+      "소설1팀": {
+        "BLOCK_DISABLED_MARKER": 0,
+        "HOLD_MIXED_CONTENT_RISK": 0,
+        "HOLD_NO_PAYMENT_SETTLEMENT": 0,
+        "OK_PAYMENT_SETTLEMENT_EXISTS": 0
+      }
+    }
+  }
+}

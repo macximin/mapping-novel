@@ -1,0 +1,82 @@
+{
+  "source_rows": 233956,
+  "cache_rows_before": 233735,
+  "cache_rows_after": 233956,
+  "s2_lookup_rows": 209627,
+  "s2_change_added": 218,
+  "s2_change_deleted": 13,
+  "s2_change_modified": 0,
+  "output_cache": "C:\\Users\\User\\Desktop\\mapping-novel\\data\\kiss_payment_settlement_cache.csv",
+  "output_cache_parts": [
+    "C:\\Users\\User\\Desktop\\mapping-novel\\data\\kiss_payment_settlement_cache_part_001.csv",
+    "C:\\Users\\User\\Desktop\\mapping-novel\\data\\kiss_payment_settlement_cache_part_002.csv",
+    "C:\\Users\\User\\Desktop\\mapping-novel\\data\\kiss_payment_settlement_cache_part_003.csv",
+    "C:\\Users\\User\\Desktop\\mapping-novel\\data\\kiss_payment_settlement_cache_part_004.csv"
+  ],
+  "output_s2_lookup": "C:\\Users\\User\\Desktop\\mapping-novel\\data\\kiss_payment_settlement_s2_lookup.csv",
+  "summary": {
+    "rows": 233956,
+    "columns": 52,
+    "content_shape_counts": {
+      "소설": 141692,
+      "영상": 50226,
+      "웹툰": 41670,
+      "굿즈": 134,
+      "기타": 120,
+      "NFT": 59,
+      "출판": 21,
+      "숏툰": 16,
+      "판권": 9,
+      "오디오드라마": 7,
+      "해외출판": 2
+    },
+    "approval_status_counts": {
+      "승인": 219294,
+      "미승인": 14580,
+      "승인취소": 82
+    },
+    "payment_settlement_status_counts": {
+      "운영중": 230806,
+      "종료": 2141,
+      "거래처확인필요": 910,
+      "콘텐츠확인필요": 99
+    },
+    "top_channel_counts": {
+      "봄툰KR(1068149784)": 36823,
+      "원스토어(소설)": 11281,
+      "미스터블루(소설)": 10851,
+      "판무림": 10533,
+      "한아름(P000003716)": 8411,
+      "Yes24(서점)": 4597,
+      "인터파크": 4266,
+      "리디북스(이벤트)": 4227,
+      "웹소설 하이북": 4062,
+      "북큐브(소설)": 4045,
+      "구글(소설)": 3935,
+      "네이버_일반": 3798,
+      "교보문고(소설)": 3736,
+      "무툰(소설 서비스)": 3413,
+      "한국이퍼브": 3372,
+      "네이버_장르(광고수익)": 3277,
+      "유페이퍼": 3063,
+      "누온": 2855,
+      "스토린랩(원스토어)": 2406,
+      "웹하드_PPV": 2313
+    },
+    "content_id_nonblank": 233956,
+    "content_id_unique": 59023,
+    "sales_channel_content_id_nonblank": 231919,
+    "sales_channel_content_id_unique": 209627,
+    "registered_at_min": "2024-12-31T12:00:00",
+    "registered_at_max": "2026-05-08T17:48:31",
+    "sales_channel_content_id_duplicate_keys": 17104,
+    "sales_channel_content_id_multiple_titles": 5,
+    "sales_channel_content_id_multiple_master_ids": 17104,
+    "sales_channel_content_id_multiple_content_ids": 5,
+    "s2_change_summary": {
+      "added": 218,
+      "deleted": 13,
+      "modified": 0
+    }
+  }
+}
