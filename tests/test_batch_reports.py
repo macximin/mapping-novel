@@ -9,6 +9,32 @@ from mapping_core import MappingResult
 
 
 class BatchReportsTest(unittest.TestCase):
+    def test_combined_report_sorts_s2_match_status_text_descending(self) -> None:
+        rows = pd.DataFrame(
+            [
+                {"정산서_콘텐츠명": "정상", "정제_상품명": "정상", "S2_매칭상태": "matched"},
+                {"정산서_콘텐츠명": "공백", "정제_상품명": "", "S2_매칭상태": "blank_key"},
+                {"정산서_콘텐츠명": "없음", "정제_상품명": "없음", "S2_매칭상태": "no_match"},
+            ]
+        )
+        result = {
+            "status": "success",
+            "source_name": "fixture.xlsx",
+            "s2_sales_channel": "네이버_연재",
+            "platform": "네이버",
+            "mapping": MappingResult(
+                rows=rows,
+                summary=pd.DataFrame(),
+                review_rows=pd.DataFrame(),
+                duplicate_candidates=pd.DataFrame(),
+                input_validation=pd.DataFrame(),
+            ),
+        }
+
+        combined = build_combined_mapping_report_frame([result])
+
+        self.assertEqual(combined["S2_매칭상태"].tolist(), ["no_match", "matched", "blank_key"])
+
     def test_work_order_report_groups_review_rows_for_pd_sheet(self) -> None:
         rows = pd.DataFrame(
             [

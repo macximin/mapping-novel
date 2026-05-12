@@ -94,7 +94,7 @@ def build_combined_mapping_report_frame(results: list[dict[str, Any]]) -> pd.Dat
     if not frames:
         return pd.DataFrame(columns=COMBINED_REPORT_COLUMNS)
     combined = pd.concat(frames, ignore_index=True)
-    return _ensure_columns(combined, COMBINED_REPORT_COLUMNS)
+    return _sort_combined_report(_ensure_columns(combined, COMBINED_REPORT_COLUMNS))
 
 
 def build_pd_work_order_report_frame(results: list[dict[str, Any]]) -> pd.DataFrame:
@@ -172,6 +172,12 @@ def _ensure_columns(frame: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
         if column not in result.columns:
             result[column] = ""
     return result[columns]
+
+
+def _sort_combined_report(frame: pd.DataFrame) -> pd.DataFrame:
+    if frame.empty or "S2_매칭상태" not in frame.columns:
+        return frame
+    return frame.sort_values("S2_매칭상태", ascending=False, kind="mergesort").reset_index(drop=True)
 
 
 def _join_unique(values: pd.Series) -> str:
