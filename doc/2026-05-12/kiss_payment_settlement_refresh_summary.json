@@ -1,11 +1,11 @@
 {
   "source_rows": 141732,
-  "cache_rows_before": 233956,
+  "cache_rows_before": 141732,
   "cache_rows_after": 141732,
   "s2_lookup_rows": 124755,
-  "s2_change_added": 39,
-  "s2_change_deleted": 84911,
-  "s2_change_modified": 1,
+  "s2_change_added": 0,
+  "s2_change_deleted": 0,
+  "s2_change_modified": 0,
   "output_cache": "C:\\Users\\User\\Desktop\\mapping-novel\\data\\kiss_payment_settlement_cache.csv",
   "output_cache_parts": [
     "C:\\Users\\User\\Desktop\\mapping-novel\\data\\kiss_payment_settlement_cache_part_001.csv",
@@ -62,9 +62,9 @@
     "sales_channel_content_id_multiple_master_ids": 12045,
     "sales_channel_content_id_multiple_content_ids": 1,
     "s2_change_summary": {
-      "added": 39,
-      "deleted": 84911,
-      "modified": 1
+      "added": 0,
+      "deleted": 0,
+      "modified": 0
     }
   }
 }
