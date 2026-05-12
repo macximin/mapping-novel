@@ -7,10 +7,11 @@ import json
 import os
 import subprocess
 import sys
+import time
 import zipfile
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import pandas as pd
 import streamlit as st
@@ -26,6 +27,12 @@ from matching_rules import (
     platform_for_s2_sales_channel,
     s2_filter_validation_rows,
     s2_sales_channel_to_platform,
+)
+from parallel_mapping import (
+    ProgressEvent,
+    resolve_mapping_worker_count,
+    run_ordered_parallel_tasks,
+    snapshot_uploaded_file,
 )
 from settlement_adapters import (
     adapter_audit_dataframe,
@@ -775,6 +782,7 @@ def build_mapping_session_state(
     s2_source_label: str,
     payment_summary: dict[str, object] | None,
 ) -> dict[str, Any]:
+    results = ordered_mapping_results(results)
     summary_frame = batch_summary_frame(results)
     work_order_frame = build_pd_work_order_report_frame(results)
     combined_report_frame = build_combined_mapping_report_frame(results)
@@ -795,6 +803,66 @@ def build_mapping_session_state(
     }
 
 
+def ordered_mapping_results(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    fallback = len(results) + 1
+    return sorted(results, key=lambda result: safe_int(result.get("input_index"), fallback))
+
+
+def output_stem_for_batch_item(
+    settlement_file: object,
+    *,
+    file_count: int,
+    single_output_name: str,
+) -> str:
+    if file_count == 1:
+        raw_output_stem = single_output_name or default_mapping_stem(settlement_file)
+    else:
+        raw_output_stem = default_mapping_stem(settlement_file)
+    return sanitize_output_stem(raw_output_stem) or default_mapping_stem(settlement_file)
+
+
+def mapping_failed_result(
+    *,
+    settlement_file: object,
+    selected_s2_channel: str,
+    output_stem: str,
+    input_index: int,
+    worker_slot: int,
+    exc: BaseException,
+) -> dict[str, Any]:
+    now = datetime.now(KST).isoformat(timespec="seconds")
+    source_name = text(getattr(settlement_file, "name", "")) or text(settlement_file) or "uploaded.xlsx"
+    s2_channel = s2_channel_for_file(settlement_file, selected_s2_channel)
+    effective_platform = effective_platform_for_file(settlement_file, selected_s2_channel)
+    return {
+        "source_name": source_name,
+        "output_stem": output_stem,
+        "platform": effective_platform,
+        "s2_sales_channel": s2_channel,
+        "status": "failed",
+        "error": f"{type(exc).__name__}: {exc}",
+        "blocking_messages": [],
+        "warning_messages": [],
+        "info_messages": [],
+        "mapping_bytes": b"",
+        "transfer_bytes": b"",
+        "input_index": input_index,
+        "worker_slot": worker_slot,
+        "started_at": now,
+        "finished_at": now,
+        "elapsed_seconds": "",
+    }
+
+
+def safe_progress_callback(progress_callback: Callable[[str], None] | None, stage: str) -> None:
+    if progress_callback is None:
+        return
+    try:
+        progress_callback(stage)
+    except Exception:
+        return
+
+
 def process_settlement_batch_item(
     *,
     settlement_file: object,
@@ -804,10 +872,15 @@ def process_settlement_batch_item(
     s2_guard_filter: S2GuardFilterResult,
     master_df: pd.DataFrame | None,
     output_stem: str,
+    input_index: int | None = None,
+    worker_slot: int | None = None,
+    progress_callback: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     source_name = text(getattr(settlement_file, "name", "uploaded.xlsx"))
     s2_channel = s2_channel_for_file(settlement_file, selected_s2_channel)
     effective_platform = effective_platform_for_file(settlement_file, selected_s2_channel)
+    started_at = datetime.now(KST)
+    started_timer = time.perf_counter()
     result: dict[str, Any] = {
         "source_name": source_name,
         "output_stem": output_stem,
@@ -820,15 +893,27 @@ def process_settlement_batch_item(
         "info_messages": [],
         "mapping_bytes": b"",
         "transfer_bytes": b"",
+        "input_index": input_index if input_index is not None else "",
+        "worker_slot": worker_slot if worker_slot is not None else "",
+        "started_at": started_at.isoformat(timespec="seconds"),
+        "finished_at": "",
+        "elapsed_seconds": "",
     }
+
+    def finish(stage: str) -> dict[str, Any]:
+        result["finished_at"] = datetime.now(KST).isoformat(timespec="seconds")
+        result["elapsed_seconds"] = round(time.perf_counter() - started_timer, 2)
+        safe_progress_callback(progress_callback, stage)
+        return result
 
     try:
         if not s2_channel or not effective_platform:
             result["status"] = "blocked"
             result["error"] = S2_CHANNEL_FILENAME_GUIDE
-            return result
+            return finish("차단")
         if hasattr(settlement_file, "seek"):
             settlement_file.seek(0)
+        safe_progress_callback(progress_callback, "엑셀 정규화 중")
         adapter_result = normalize_settlement(
             settlement_file,
             platform=effective_platform,
@@ -852,9 +937,10 @@ def process_settlement_batch_item(
         if blocking_messages:
             result["status"] = "blocked"
             result["error"] = " | ".join(blocking_messages)
-            return result
+            return finish("차단")
 
         settlement_df = adapter_result.to_mapping_feed()
+        safe_progress_callback(progress_callback, "S2 필터/매핑 중")
         s2_channel_filter = filter_s2_by_sales_channel(s2_df, sales_channel=s2_channel, source_name=source_name)
         result["s2_channel_filter"] = s2_channel_filter
         if s2_channel_filter.active and s2_channel_filter.after_rows == 0:
@@ -864,6 +950,7 @@ def process_settlement_batch_item(
         elif s2_channel_filter.reason:
             warning_messages.append(s2_channel_filter.reason)
         mapping = build_mapping(s2_channel_filter.frame, settlement_df, master_df)
+        safe_progress_callback(progress_callback, "guard/전송자료 검증 중")
         mapping = annotate_mapping_result(
             mapping,
             s2_guards,
@@ -886,6 +973,7 @@ def process_settlement_batch_item(
             amount_policy_locked=adapter_result.spec.s2_amount_policy_locked,
             s2_gate=adapter_result.spec.s2_gate,
         )
+        safe_progress_callback(progress_callback, "결과 엑셀 생성 중")
         result.update(
             {
                 "status": "success",
@@ -896,11 +984,187 @@ def process_settlement_batch_item(
                 "transfer_bytes": export_s2_transfer(s2_transfer) if s2_transfer.exportable else b"",
             }
         )
-        return result
+        return finish("완료")
     except Exception as exc:
         result["status"] = "failed"
         result["error"] = f"{type(exc).__name__}: {exc}"
-        return result
+        return finish("실패")
+
+
+def progress_cell(value: object) -> str:
+    return text(value).replace("|", "\\|").replace("\n", " ")
+
+
+def progress_stage_label(status: object, stage: object) -> str:
+    normalized_status = text(status)
+    if normalized_status == "success":
+        return "완료"
+    if normalized_status == "blocked":
+        return "차단"
+    if normalized_status == "failed":
+        return "실패"
+    return text(stage) or "대기"
+
+
+def mapping_progress_markdown(
+    *,
+    total: int,
+    completed: int,
+    worker_count: int,
+    slot_states: dict[int, dict[str, Any]],
+    status_counts: dict[str, int],
+) -> str:
+    active = sum(
+        1
+        for state in slot_states.values()
+        if text(state.get("stage")) not in ("", "대기", "완료", "차단", "실패")
+    )
+    lines = [
+        f"**{completed:,}/{total:,} 완료 · {active:,}개 처리 중 · 병렬 {worker_count:,}**",
+        f"성공 {safe_int(status_counts.get('success')):,} · 차단 {safe_int(status_counts.get('blocked')):,} · 실패 {safe_int(status_counts.get('failed')):,}",
+        "",
+        "| 슬롯 | 상태 | 파일 |",
+        "|---:|---|---|",
+    ]
+    for slot in range(1, worker_count + 1):
+        state = slot_states.get(slot, {})
+        index = safe_int(state.get("index"), -1)
+        prefix = f"{index + 1:,}. " if index >= 0 else ""
+        lines.append(
+            f"| {slot} | {progress_cell(state.get('stage') or '대기')} | {progress_cell(prefix + text(state.get('source_name')))} |"
+        )
+    return "\n".join(lines)
+
+
+def process_settlement_files(
+    *,
+    settlement_files: list[object],
+    selected_s2_channel: str,
+    s2_df: pd.DataFrame,
+    s2_guards: S2ReferenceGuards,
+    s2_guard_filter: S2GuardFilterResult,
+    master_df: pd.DataFrame | None,
+    single_output_name: str,
+    progress_slot: Any,
+) -> list[dict[str, Any]]:
+    total = len(settlement_files)
+    worker_count = resolve_mapping_worker_count(total)
+    slot_states: dict[int, dict[str, Any]] = {
+        slot: {"index": "", "source_name": "", "stage": "대기"} for slot in range(1, worker_count + 1)
+    }
+    status_counts = {"success": 0, "blocked": 0, "failed": 0}
+    completed = 0
+
+    def render_progress() -> None:
+        progress_slot.markdown(
+            mapping_progress_markdown(
+                total=total,
+                completed=completed,
+                worker_count=worker_count,
+                slot_states=slot_states,
+                status_counts=status_counts,
+            )
+        )
+
+    def on_progress(event: ProgressEvent) -> None:
+        slot_states[event.slot] = {
+            "index": event.index,
+            "source_name": event.source_name,
+            "stage": progress_stage_label(event.status, event.stage),
+        }
+        render_progress()
+
+    def on_result(result: dict[str, Any]) -> None:
+        nonlocal completed
+        completed += 1
+        status = text(result.get("status"))
+        if status in status_counts:
+            status_counts[status] += 1
+        slot = safe_int(result.get("worker_slot"))
+        if slot:
+            slot_states[slot] = {
+                "index": result.get("input_index", ""),
+                "source_name": result.get("source_name", ""),
+                "stage": progress_stage_label(status, status),
+            }
+        render_progress()
+
+    def run_item(index: int, slot: int, settlement_file: object, progress: Callable[[str, str], None]) -> dict[str, Any]:
+        output_stem = output_stem_for_batch_item(
+            settlement_file,
+            file_count=total,
+            single_output_name=single_output_name,
+        )
+        return process_settlement_batch_item(
+            settlement_file=settlement_file,
+            selected_s2_channel=selected_s2_channel,
+            s2_df=s2_df,
+            s2_guards=s2_guards,
+            s2_guard_filter=s2_guard_filter,
+            master_df=master_df,
+            output_stem=output_stem,
+            input_index=index,
+            worker_slot=slot,
+            progress_callback=lambda stage: progress(stage, "running"),
+        )
+
+    def failed_result(index: int, slot: int, settlement_file: object, exc: BaseException) -> dict[str, Any]:
+        output_stem = output_stem_for_batch_item(
+            settlement_file,
+            file_count=total,
+            single_output_name=single_output_name,
+        )
+        return mapping_failed_result(
+            settlement_file=settlement_file,
+            selected_s2_channel=selected_s2_channel,
+            output_stem=output_stem,
+            input_index=index,
+            worker_slot=slot,
+            exc=exc,
+        )
+
+    render_progress()
+    if worker_count == 1:
+        results: list[dict[str, Any]] = []
+        for index, settlement_file in enumerate(settlement_files):
+            on_progress(
+                ProgressEvent(
+                    index=index,
+                    slot=1,
+                    source_name=text(getattr(settlement_file, "name", "")) or "uploaded.xlsx",
+                    stage="처리 시작",
+                )
+            )
+            try:
+                result = run_item(
+                    index,
+                    1,
+                    settlement_file,
+                    lambda stage, status="running", idx=index, file=settlement_file: on_progress(
+                        ProgressEvent(
+                            index=idx,
+                            slot=1,
+                            source_name=text(getattr(file, "name", "")) or "uploaded.xlsx",
+                            stage=stage,
+                            status=status,
+                        )
+                    ),
+                )
+            except BaseException as exc:
+                result = failed_result(index, 1, settlement_file, exc)
+            results.append(result)
+            on_result(result)
+        return results
+
+    return run_ordered_parallel_tasks(
+        settlement_files,
+        worker_count=worker_count,
+        snapshot_item=lambda _index, _slot, file: snapshot_uploaded_file(file),
+        process_item=run_item,
+        failed_result=failed_result,
+        on_progress=on_progress,
+        on_result=on_result,
+    )
 
 
 def batch_summary_frame(results: list[dict[str, Any]]) -> pd.DataFrame:
@@ -929,6 +1193,8 @@ def batch_summary_frame(results: list[dict[str, Any]]) -> pd.DataFrame:
                 "청구 후보": mapping_summary.get("청구정산 후보", ""),
                 "누락 제외": mapping_summary.get("S2 정산정보 누락 제외 행 수", ""),
                 "S2 전송자료": transfer_exportable,
+                "처리초": result.get("elapsed_seconds", ""),
+                "작업슬롯": result.get("worker_slot", ""),
                 "메시지": result.get("error", ""),
             }
         )
@@ -1531,7 +1797,6 @@ run_clicked = st.button("어댑터 정규화 및 S2 매핑 실행", type="primar
 
 if run_clicked:
     try:
-        results: list[dict[str, Any]] = []
         progress_slot = st.empty()
         with st.spinner("S2 기준과 정산서 엑셀을 처리하는 중..."):
             progress_slot.caption("S2 기준 불러오는 중")
@@ -1540,25 +1805,16 @@ if run_clicked:
                 payment_settlement_file=payment_settlement_file,
                 s2_file=s2_file,
             )
-
-            for idx, settlement_file in enumerate(settlement_files, start=1):
-                progress_slot.caption(f"{idx:,}/{len(settlement_files):,} 처리 중: {settlement_file.name}")
-                if len(settlement_files) == 1:
-                    raw_output_stem = single_output_name or default_mapping_stem(settlement_file)
-                else:
-                    raw_output_stem = default_mapping_stem(settlement_file)
-                output_stem = sanitize_output_stem(raw_output_stem) or default_mapping_stem(settlement_file)
-                results.append(
-                    process_settlement_batch_item(
-                        settlement_file=settlement_file,
-                        selected_s2_channel=selected_s2_channel,
-                        s2_df=s2_df,
-                        s2_guards=s2_guards,
-                        s2_guard_filter=s2_guard_filter,
-                        master_df=master_df,
-                        output_stem=output_stem,
-                    )
-                )
+            results = process_settlement_files(
+                settlement_files=settlement_files,
+                selected_s2_channel=selected_s2_channel,
+                s2_df=s2_df,
+                s2_guards=s2_guards,
+                s2_guard_filter=s2_guard_filter,
+                master_df=master_df,
+                single_output_name=single_output_name,
+                progress_slot=progress_slot,
+            )
         progress_slot.empty()
         st.session_state[MAPPING_RESULT_STATE_KEY] = build_mapping_session_state(
             signature=run_signature,
