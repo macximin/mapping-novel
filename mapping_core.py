@@ -130,7 +130,8 @@ def _candidate_index(
     working[id_col] = working[id_col].map(text)
     working[title_col] = working[title_col].map(text)
 
-    for key, group in working[working[key_col].map(bool)].groupby(key_col, dropna=False):
+    has_key = working[key_col].map(bool).astype(bool)
+    for key, group in working.loc[has_key].groupby(key_col, dropna=False):
         group, auto_select_date_col = _sort_candidates_for_auto_selection(group)
         ids = [value for value in dict.fromkeys(group[id_col].map(text)) if value]
         titles = [value for value in dict.fromkeys(group[title_col].map(text)) if value]

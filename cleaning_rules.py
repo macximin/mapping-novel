@@ -26,6 +26,26 @@ DISABLED_ROW_MARKERS = (
 TITLE_EXCEPTIONS = ("24/7", "실명마제", "라마대제")
 MASTER_CONFIRMED_STATUS = "확정"
 MASTER_CONFIRMED_TRAILING_FIELD_COUNT = 4
+STRUCTURED_S2_TITLE_PATTERN = re.compile(r"^\d+_([^_]+)_[^_]+_일반$")
+EXACT_CLEAN_TITLE_ALIASES = {
+    "늙은경비에게조교당하는스튜어디스의이야기": "늙은경비에게조교당하는스튜어디스",
+    "늙은경비에게조교당하는스튜어디스이야기": "늙은경비에게조교당하는스튜어디스",
+    "천대받는f급힐러라좋았는데요": "천대받는f급힐러라서좋았는데요",
+    "던전에서성자가하는일": "던전에서성자性者가하는일",
+    "백치공주시리즈": "백치공주",
+}
+SQUARE_WRAPPER_TAGS = (
+    "bl",
+    "gl",
+    "tl",
+    "19",
+    "19금",
+    "성인",
+    "연재",
+    "단행본",
+    "외전",
+    "완결",
+)
 
 
 @dataclass(frozen=True)
@@ -65,6 +85,33 @@ class CleaningPolicy:
             return frame.copy().reset_index(drop=True)
         return frame.loc[~self.disabled_row_mask(frame, columns=columns)].reset_index(drop=True)
 
+    def _whole_square_wrapped_title(self, value: str) -> str:
+        match = re.fullmatch(r"\[([^\[\]]+)\]", value)
+        if not match:
+            return ""
+
+        inner = self.text(match.group(1))
+        if not inner:
+            return ""
+
+        normalized_inner = unicodedata.normalize("NFKC", inner)
+        marker_names = {
+            marker.strip("[]()").lower()
+            for marker in self.disabled_row_markers
+        }
+        if normalized_inner.lower() in marker_names or normalized_inner.lower() in SQUARE_WRAPPER_TAGS:
+            return ""
+        return inner
+
+    def _structured_s2_title_segment(self, value: str) -> str:
+        match = STRUCTURED_S2_TITLE_PATTERN.fullmatch(value)
+        if not match:
+            return ""
+        return self.text(match.group(1))
+
+    def _apply_exact_title_alias(self, key: str) -> str:
+        return EXACT_CLEAN_TITLE_ALIASES.get(key, key)
+
     def clean_title(self, value: Any) -> str:
         t = str(value).strip()
 
@@ -81,10 +128,18 @@ class CleaningPolicy:
         if re.fullmatch(r"\d{1,2}월\d{1,2}일", t):
             return t.lower()
 
+        structured_s2_title = self._structured_s2_title_segment(t)
+        if structured_s2_title:
+            t = structured_s2_title
+
         t = re.sub(r"\s*\d+/\d+$", "", t).lower()
-        t = re.sub(r"\s*제\s*\d+[권화]", "", t)
+        t = re.sub(r"(^|\s)제\s*\d+[권화]", " ", t)
         for old, new in {"Un-holyNight": "UnholyNight", "?": "", "~": "", ",": "", "-": "", "_": ""}.items():
             t = t.replace(old, new)
+
+        whole_square_wrapped_title = self._whole_square_wrapped_title(t)
+        if whole_square_wrapped_title:
+            t = whole_square_wrapped_title
 
         t = re.sub(r"\([^)]*\)|\[[^\]]*\]", "", t)
         t = re.sub(r"【[^】]*】", "", t)
@@ -93,7 +148,7 @@ class CleaningPolicy:
             t = re.sub(pattern, "", t)
 
         t = unicodedata.normalize("NFKC", t)
-        t = re.sub(r"\d+[권화부회]", "", t)
+        t = re.sub(r"\d+\s*[권화부회]", "", t)
 
         for keyword in [
             "개정판 l",
@@ -118,11 +173,11 @@ class CleaningPolicy:
             t = t.replace(keyword, "")
 
         t = re.sub(r"\d+", "", t).rstrip(".")
-        t = re.sub(r"[\.\~\-–—!@#$%^&*_=+\\|/:;\"''`<>?，｡､{}()]", "", t)
+        t = re.sub(r"[\.,\~\-–—!@#$%^&*_=+\\|/:;\"''`<>?，｡､{}()]", "", t)
         t = t.replace("[", "").replace("]", "")
         t = re.sub(r"특별$", "", t)
         t = "".join(t.split())
-        return t.strip().lower()
+        return self._apply_exact_title_alias(t.strip().lower())
 
     def extract_master_work_title(self, value: Any) -> str:
         raw = unicodedata.normalize("NFKC", self.text(value))

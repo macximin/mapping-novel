@@ -19,6 +19,9 @@ class BatchReportsTest(unittest.TestCase):
                     "정제_상품명": "없는작품",
                     "S2_매칭상태": "no_match",
                     "S2_후보수": "0",
+                    "S2_미매핑상세사유": "해당채널 지급정산 없음 / 타채널 지급정산 존재",
+                    "S2_미매핑근거": "타채널 지급정산: 판매채널명=다른채널, 콘텐츠ID=CID-1",
+                    "S2_권장조치": "해당 판매채널 지급정산 생성/보강 여부 판단",
                     "검토필요사유": "S2 미매핑",
                     "검토필요(Y/N)": "Y",
                 },
@@ -29,6 +32,9 @@ class BatchReportsTest(unittest.TestCase):
                     "정제_상품명": "없는작품",
                     "S2_매칭상태": "no_match",
                     "S2_후보수": "0",
+                    "S2_미매핑상세사유": "해당채널 지급정산 없음 / 타채널 지급정산 존재",
+                    "S2_미매핑근거": "타채널 지급정산: 판매채널명=다른채널, 콘텐츠ID=CID-1",
+                    "S2_권장조치": "해당 판매채널 지급정산 생성/보강 여부 판단",
                     "검토필요사유": "S2 미매핑",
                     "검토필요(Y/N)": "Y",
                 },
@@ -69,7 +75,9 @@ class BatchReportsTest(unittest.TestCase):
         self.assertEqual(work_order.loc[0, "S2 검색어"], "없는작품")
         self.assertIn("S2 판매채널", work_order.columns)
         self.assertIn("담당PD", work_order.columns)
-        self.assertIn("S2 판매채널에서 정제 제목으로 검색", work_order.loc[0, "권장액션"])
+        self.assertIn("S2_미매핑상세사유", combined.columns)
+        self.assertIn("S2_미매핑근거", work_order.columns)
+        self.assertIn("해당 판매채널 지급정산 생성/보강 여부 판단", work_order.loc[0, "권장액션"])
         self.assertEqual(work_order.loc[0, "원본행번호목록"], "1 | 2")
         self.assertEqual(work_order.loc[0, "엑셀행번호목록"], "10 | 20")
 

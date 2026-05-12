@@ -29,7 +29,13 @@ COMBINED_REPORT_COLUMNS = [
     "청구정산_후보수",
     "청구정산마스터ID목록",
     "청구정산_계약ID목록",
+    "S2_판매채널콘텐츠_후보수",
+    "S2_판매채널콘텐츠_판매채널콘텐츠ID목록",
+    "S2_판매채널콘텐츠_콘텐츠ID목록",
     "S2_분리사유",
+    "S2_미매핑상세사유",
+    "S2_미매핑근거",
+    "S2_권장조치",
     "검토필요사유",
     "검토필요(Y/N)",
 ]
@@ -56,12 +62,17 @@ WORK_ORDER_COLUMNS = [
     "S2_후보수",
     "S2_후보ID목록",
     "S2_후보콘텐츠명목록",
+    "S2_미매핑상세사유",
+    "S2_미매핑근거",
     "S2_정산정보누락_후보수",
     "S2_정산정보누락_판매채널콘텐츠ID목록",
     "S2_정산정보누락_콘텐츠ID목록",
     "청구정산_후보수",
     "청구정산마스터ID목록",
     "청구정산_계약ID목록",
+    "S2_판매채널콘텐츠_후보수",
+    "S2_판매채널콘텐츠_판매채널콘텐츠ID목록",
+    "S2_판매채널콘텐츠_콘텐츠ID목록",
     "PD 확인 메모",
 ]
 
@@ -105,8 +116,12 @@ def build_pd_work_order_report_frame(results: list[dict[str, Any]]) -> pd.DataFr
         "S2_후보ID목록",
         "S2_후보콘텐츠명목록",
         "S2_분리사유",
+        "S2_미매핑상세사유",
+        "S2_미매핑근거",
+        "S2_권장조치",
         "S2_정산정보누락_판매채널콘텐츠ID목록",
         "청구정산마스터ID목록",
+        "S2_판매채널콘텐츠_판매채널콘텐츠ID목록",
     ]
     for _, group in review_rows.groupby(group_cols, dropna=False, sort=False):
         first = group.iloc[0]
@@ -133,12 +148,17 @@ def build_pd_work_order_report_frame(results: list[dict[str, Any]]) -> pd.DataFr
                 "S2_후보수": first["S2_후보수"],
                 "S2_후보ID목록": first["S2_후보ID목록"],
                 "S2_후보콘텐츠명목록": first["S2_후보콘텐츠명목록"],
+                "S2_미매핑상세사유": first["S2_미매핑상세사유"],
+                "S2_미매핑근거": first["S2_미매핑근거"],
                 "S2_정산정보누락_후보수": first["S2_정산정보누락_후보수"],
                 "S2_정산정보누락_판매채널콘텐츠ID목록": first["S2_정산정보누락_판매채널콘텐츠ID목록"],
                 "S2_정산정보누락_콘텐츠ID목록": first["S2_정산정보누락_콘텐츠ID목록"],
                 "청구정산_후보수": first["청구정산_후보수"],
                 "청구정산마스터ID목록": first["청구정산마스터ID목록"],
                 "청구정산_계약ID목록": first["청구정산_계약ID목록"],
+                "S2_판매채널콘텐츠_후보수": first["S2_판매채널콘텐츠_후보수"],
+                "S2_판매채널콘텐츠_판매채널콘텐츠ID목록": first["S2_판매채널콘텐츠_판매채널콘텐츠ID목록"],
+                "S2_판매채널콘텐츠_콘텐츠ID목록": first["S2_판매채널콘텐츠_콘텐츠ID목록"],
                 "PD 확인 메모": "",
             }
         )
@@ -164,6 +184,9 @@ def _join_unique(values: pd.Series) -> str:
 
 
 def _suggest_action(row: pd.Series) -> str:
+    detailed_action = text(row.get("S2_권장조치"))
+    if detailed_action:
+        return detailed_action
     reason = text(row.get("검토필요사유"))
     status = text(row.get("S2_매칭상태"))
     if "청구정산 후보" in reason:

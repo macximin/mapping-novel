@@ -3,10 +3,12 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections import Counter
 from datetime import date
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
 import requests
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -27,6 +29,7 @@ from scripts.refresh_kiss_payment_settlement import create_authenticated_session
 FULL_REPLACE_START_DATE = date(1900, 1, 1)
 DEFAULT_PAGE_SIZE = 1_000_000
 DEFAULT_CONTENT_STYLE_CODE = "102"
+DEFAULT_S2_LOOKUP = ROOT / "data" / "kiss_payment_settlement_s2_lookup.csv"
 
 
 def main() -> None:
@@ -39,6 +42,13 @@ def main() -> None:
             session,
             content_style_code=args.content_style_code,
             platform_code=args.platform_code,
+            page_size=args.page_size,
+        )
+        missing_comparisons = fetch_missing_platform_comparisons(
+            session,
+            base_rows=missing_rows,
+            platform_codes=args.compare_platform_code,
+            content_style_code=args.content_style_code,
             page_size=args.page_size,
         )
         billing_rows, billing_total, billing_pages = fetch_billing_rows(
@@ -58,20 +68,31 @@ def main() -> None:
     summary = {
         "created_at": today.isoformat(),
         "content_style_code": args.content_style_code,
+        "missing_platform_code": args.platform_code,
         "missing_rows_raw": len(missing_rows),
         "missing_lookup_rows": len(missing),
+        "missing_sales_channel_counts": value_counts(missing, "판매채널명"),
+        "missing_content_shape_counts": value_counts(missing, "콘텐츠형태"),
+        "missing_settlement_start_counts": value_counts(missing, "정산시작여부"),
+        "missing_overlap_with_s2_lookup": missing_overlap_count(missing, Path(args.s2_lookup)),
+        "missing_platform_comparisons": missing_comparisons,
         "billing_api_total_rows": billing_total,
         "billing_rows_raw": len(billing_rows),
         "billing_pages": billing_pages,
         "billing_lookup_rows": len(billing),
+        "billing_sales_channel_counts": value_counts(billing, "판매채널명"),
         "missing_lookup": str(missing_path),
         "billing_lookup": str(billing_path),
+        "s2_lookup": str(args.s2_lookup),
     }
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
 
     print(f"content_style_code={args.content_style_code}")
+    print(f"missing_platform_code={args.platform_code or '<blank>'}")
     print(f"missing_rows_raw={len(missing_rows)}")
     print(f"missing_lookup_rows={len(missing)}")
+    print(f"missing_overlap_with_s2_lookup={summary['missing_overlap_with_s2_lookup']}")
+    print(f"missing_platform_comparisons={len(missing_comparisons)}")
     print(f"billing_api_total_rows={billing_total}")
     print(f"billing_rows_raw={len(billing_rows)}")
     print(f"billing_pages={billing_pages}")
@@ -88,8 +109,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--page-size", type=int, default=DEFAULT_PAGE_SIZE)
     parser.add_argument("--content-style-code", default=DEFAULT_CONTENT_STYLE_CODE)
     parser.add_argument("--platform-code", default="", help="S2 plfmCd. Blank fetches all platforms when the API supports it.")
+    parser.add_argument(
+        "--compare-platform-code",
+        action="append",
+        default=[],
+        help="Fetch an additional S2 plfmCd for audit only. Can be passed multiple times.",
+    )
     parser.add_argument("--missing-lookup", default=str(DEFAULT_MISSING_LOOKUP))
     parser.add_argument("--billing-lookup", default=str(DEFAULT_BILLING_LOOKUP))
+    parser.add_argument("--s2-lookup", default=str(DEFAULT_S2_LOOKUP))
     parser.add_argument("--summary", default="")
     return parser.parse_args()
 
@@ -120,6 +148,65 @@ def fetch_missing_rows(
     if isinstance(data, dict) and isinstance(data.get("list"), list):
         return data["list"]
     raise RuntimeError(f"Unexpected missing-settlement response: {type(data).__name__}")
+
+
+def fetch_missing_platform_comparisons(
+    session: requests.Session,
+    *,
+    base_rows: list[dict[str, Any]],
+    platform_codes: list[str],
+    content_style_code: str,
+    page_size: int,
+) -> list[dict[str, Any]]:
+    base = normalize_missing_rows(base_rows)
+    base_ids = set(base["판매채널콘텐츠ID"].map(str))
+    comparisons: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for platform_code in platform_codes:
+        platform_code = str(platform_code).strip()
+        if not platform_code or platform_code in seen:
+            continue
+        seen.add(platform_code)
+        rows = fetch_missing_rows(
+            session,
+            content_style_code=content_style_code,
+            platform_code=platform_code,
+            page_size=page_size,
+        )
+        frame = normalize_missing_rows(rows)
+        ids = set(frame["판매채널콘텐츠ID"].map(str))
+        comparisons.append(
+            {
+                "platform_code": platform_code,
+                "raw_rows": len(rows),
+                "lookup_rows": len(frame),
+                "same_ids_as_base": ids == base_ids,
+                "ids_only_in_base": len(base_ids - ids),
+                "ids_only_in_platform": len(ids - base_ids),
+                "sales_channel_counts": value_counts(frame, "판매채널명"),
+                "content_shape_counts": value_counts(frame, "콘텐츠형태"),
+                "settlement_start_counts": value_counts(frame, "정산시작여부"),
+            }
+        )
+    return comparisons
+
+
+def value_counts(frame: pd.DataFrame, column: str, *, limit: int = 20) -> dict[str, int]:
+    if frame.empty or column not in frame.columns:
+        return {}
+    counter = Counter(str(value).strip() for value in frame[column].fillna("") if str(value).strip())
+    return {key: int(value) for key, value in counter.most_common(limit)}
+
+
+def missing_overlap_count(missing: pd.DataFrame, s2_lookup_path: Path) -> int:
+    if missing.empty or "판매채널콘텐츠ID" not in missing.columns or not s2_lookup_path.exists():
+        return 0
+    s2 = pd.read_csv(s2_lookup_path, dtype=object)
+    if "판매채널콘텐츠ID" not in s2.columns:
+        return 0
+    missing_ids = set(missing["판매채널콘텐츠ID"].fillna("").map(str))
+    s2_ids = set(s2["판매채널콘텐츠ID"].fillna("").map(str))
+    return len({value for value in missing_ids & s2_ids if value})
 
 
 def fetch_billing_rows(

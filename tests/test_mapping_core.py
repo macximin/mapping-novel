@@ -97,6 +97,17 @@ class MappingCoreTest(unittest.TestCase):
 
         self.assertEqual(filtered["콘텐츠명"].tolist(), ["정상 작품"])
 
+    def test_empty_s2_reference_still_builds_no_match_rows(self) -> None:
+        s2 = pd.DataFrame(columns=["콘텐츠명", "판매채널콘텐츠ID", "판매채널명"])
+        settlement = pd.DataFrame({"작품명": ["없는 작품"]})
+
+        mapping = build_mapping(s2, settlement, None)
+        row = mapping.rows.iloc[0]
+
+        self.assertEqual(row["S2_매칭상태"], MATCH_NONE)
+        self.assertEqual(row["S2_후보수"], "0")
+        self.assertEqual(row["검토필요(Y/N)"], "Y")
+
     def test_duplicate_master_key_auto_selects_first_candidate(self) -> None:
         s2 = pd.DataFrame({"콘텐츠명": ["그 남자의 비밀"], "판매채널콘텐츠ID": ["S2-1"]})
         settlement = pd.DataFrame({"작품명": ["그 남자의 비밀"], "금액": [1000]})

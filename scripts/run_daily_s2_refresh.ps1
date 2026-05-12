@@ -67,4 +67,10 @@ Invoke-Step "S2 reference guards refresh" @(
     "--content-style-code", "102"
 )
 
+Invoke-Step "S2 sales-channel contents refresh" @(
+    "scripts\refresh_s2_sales_channel_contents.py",
+    "--env-file", $envFile,
+    "--content-style-code", "102"
+)
+
 Write-Log "Daily S2 refresh finished"

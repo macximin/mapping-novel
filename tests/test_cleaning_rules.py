@@ -59,6 +59,68 @@ class CleaningRulesTest(unittest.TestCase):
 
         self.assertEqual(filtered["콘텐츠명"].tolist(), ["정상 작품", "[사용안함]_기본표식"])
 
+    def test_policy_preserves_whole_square_wrapped_titles(self) -> None:
+        policy = CleaningPolicy()
+
+        self.assertEqual(policy.clean_title("[효종]"), "효종")
+        self.assertEqual(policy.clean_title("[BL] 효종"), "효종")
+        self.assertEqual(policy.clean_title("[BL]"), "")
+        self.assertEqual(policy.clean_title("[사용안함]"), "")
+
+    def test_policy_preserves_title_final_je_before_episode_numbers(self) -> None:
+        policy = CleaningPolicy()
+
+        self.assertEqual(policy.clean_title("파공검제 30권"), "파공검제")
+        self.assertEqual(policy.clean_title("마교육제 242화"), "마교육제")
+        self.assertEqual(policy.clean_title("수라검제 2권"), "수라검제")
+        self.assertEqual(policy.clean_title("파공검 제30권"), "파공검")
+        self.assertEqual(policy.clean_title("검(劍) 1권"), "검")
+
+    def test_policy_removes_episode_markers_with_inner_spaces(self) -> None:
+        policy = CleaningPolicy()
+
+        self.assertEqual(policy.clean_title("평화로운 먼치킨 영지 5 화"), "평화로운먼치킨영지")
+        self.assertEqual(policy.clean_title("평화로운 먼치킨 영지 10 화"), "평화로운먼치킨영지")
+
+    def test_policy_extracts_structured_s2_title_segment(self) -> None:
+        policy = CleaningPolicy()
+
+        self.assertEqual(policy.clean_title("0_야한규칙으로 다 따먹음_파워레인젖_일반"), "야한규칙으로다따먹음")
+        self.assertEqual(policy.clean_title("12_조금은 야한 우리 회사_파워레인젖_일반"), "조금은야한우리회사")
+        self.assertEqual(policy.clean_title("0_야한규칙으로 다 따먹음_파워레인젖_비일반"), "야한규칙으로다따먹음파워레인젖비일반")
+
+    def test_policy_applies_only_confirmed_exact_title_aliases(self) -> None:
+        policy = CleaningPolicy()
+
+        self.assertEqual(
+            policy.clean_title("늙은 경비에게 조교당하는 스튜어디스의 이야기 15화"),
+            "늙은경비에게조교당하는스튜어디스",
+        )
+        self.assertEqual(
+            policy.clean_title("[연재] 늙은 경비에게 조교 당하는 스튜어디스 이야기"),
+            "늙은경비에게조교당하는스튜어디스",
+        )
+        self.assertEqual(policy.clean_title("천대받는 F급 힐러라 좋았는데요?"), "천대받는f급힐러라서좋았는데요")
+        self.assertEqual(policy.clean_title("던전에서 성자가 하는 일 [단행본]"), "던전에서성자性者가하는일")
+        self.assertEqual(policy.clean_title("백치 공주 시리즈"), "백치공주")
+        self.assertEqual(policy.clean_title("독식하는 재벌 3세"), "독식하는재벌세")
+        self.assertEqual(policy.clean_title("1980 독식하는 재벌!"), "독식하는재벌")
+        self.assertEqual(policy.clean_title("다른 작품의 이야기"), "다른작품의이야기")
+
+    def test_policy_removes_commas_after_unicode_normalization(self) -> None:
+        policy = CleaningPolicy()
+
+        self.assertEqual(policy.clean_title("추억， 순간의 바람이 되어 1권"), "추억순간의바람이되어")
+        self.assertEqual(policy.clean_title("추억, 순간의 바람이 되어"), "추억순간의바람이되어")
+        self.assertEqual(
+            policy.clean_title("[19금] 서큐버스와 인큐버스， 그들의 수행기 1권"),
+            "서큐버스와인큐버스그들의수행기",
+        )
+        self.assertEqual(
+            policy.clean_title("[19금]서큐버스와인큐버스,그들의수행기"),
+            "서큐버스와인큐버스그들의수행기",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

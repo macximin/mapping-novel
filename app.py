@@ -60,10 +60,12 @@ DATA_DIR = ROOT / "data"
 S2_SOURCE_LOOKUP = DATA_DIR / "kiss_payment_settlement_s2_lookup.csv"
 S2_MISSING_LOOKUP = DATA_DIR / "s2_payment_missing_lookup.csv"
 S2_BILLING_LOOKUP = DATA_DIR / "s2_billing_settlement_lookup.csv"
+S2_SERVICE_CONTENTS_LOOKUP = DATA_DIR / "s2_sales_channel_content_lookup.csv"
 S2_HISTORY_DB = DATA_DIR / "kiss_refresh_history.sqlite"
 S2_BASELINE_SUMMARY_NAME = "kiss_payment_settlement_refresh_summary.json"
 S2_REFRESH_SCRIPT = ROOT / "scripts" / "refresh_kiss_payment_settlement.py"
 S2_GUARD_REFRESH_SCRIPT = ROOT / "scripts" / "refresh_s2_reference_guards.py"
+S2_SERVICE_CONTENT_REFRESH_SCRIPT = ROOT / "scripts" / "refresh_s2_sales_channel_contents.py"
 S2_ENV_FILE = ROOT / ".env"
 S2_REFRESH_START_DATE = date(1900, 1, 1)
 S2_FAST_PAGE_SIZE = "1000000"
@@ -255,6 +257,18 @@ def run_s2_guard_refresh() -> subprocess.CompletedProcess[str]:
     return subprocess.run(command, cwd=ROOT, text=True, capture_output=True, timeout=300, env=s2_refresh_environment())
 
 
+def run_s2_service_content_refresh() -> subprocess.CompletedProcess[str]:
+    command = [
+        sys.executable,
+        str(S2_SERVICE_CONTENT_REFRESH_SCRIPT),
+        "--env-file",
+        str(S2_ENV_FILE),
+        "--content-style-code",
+        S2_NOVEL_CONTENT_STYLE_CODE,
+    ]
+    return subprocess.run(command, cwd=ROOT, text=True, capture_output=True, timeout=900, env=s2_refresh_environment())
+
+
 def run_s2_auth_check() -> subprocess.CompletedProcess[str]:
     command = [
         sys.executable,
@@ -275,13 +289,14 @@ def run_s2_full_replace() -> tuple[subprocess.CompletedProcess[str], str]:
         return payment_completed, refresh_scope
 
     guard_completed = run_s2_guard_refresh()
+    service_content_completed = run_s2_service_content_refresh()
     combined = subprocess.CompletedProcess(
-        args=[payment_completed.args, guard_completed.args],
-        returncode=guard_completed.returncode,
-        stdout=f"{payment_completed.stdout}\n{guard_completed.stdout}",
-        stderr=f"{payment_completed.stderr}\n{guard_completed.stderr}",
+        args=[payment_completed.args, guard_completed.args, service_content_completed.args],
+        returncode=guard_completed.returncode or service_content_completed.returncode,
+        stdout=f"{payment_completed.stdout}\n{guard_completed.stdout}\n{service_content_completed.stdout}",
+        stderr=f"{payment_completed.stderr}\n{guard_completed.stderr}\n{service_content_completed.stderr}",
     )
-    return combined, f"{refresh_scope} + 누락/청구 보조 기준"
+    return combined, f"{refresh_scope} + 누락/청구/판매채널콘텐츠 보조 기준"
 
 
 def s2_refresh_error_message(completed: subprocess.CompletedProcess[str], refresh_scope: str) -> str:
@@ -688,7 +703,11 @@ def load_selected_s2_basis(
     payment_settlement_file: object | None,
     s2_file: object | None,
 ) -> tuple[pd.DataFrame, str, dict[str, Any] | None, S2ReferenceGuards, S2GuardFilterResult]:
-    guards = load_s2_reference_guards(missing_path=S2_MISSING_LOOKUP, billing_path=S2_BILLING_LOOKUP)
+    guards = load_s2_reference_guards(
+        missing_path=S2_MISSING_LOOKUP,
+        billing_path=S2_BILLING_LOOKUP,
+        service_contents_path=S2_SERVICE_CONTENTS_LOOKUP,
+    )
     if payment_settlement_file is not None:
         payment_df = load_payment_settlement_list(payment_settlement_file)
         guard_result = apply_missing_exclusions(to_s2_lookup(payment_df), guards)
@@ -845,7 +864,13 @@ def process_settlement_batch_item(
         elif s2_channel_filter.reason:
             warning_messages.append(s2_channel_filter.reason)
         mapping = build_mapping(s2_channel_filter.frame, settlement_df, master_df)
-        mapping = annotate_mapping_result(mapping, s2_guards, sales_channel=s2_channel)
+        mapping = annotate_mapping_result(
+            mapping,
+            s2_guards,
+            sales_channel=s2_channel,
+            s2_all_frame=s2_df,
+            master_df=master_df,
+        )
         filter_validation = s2_filter_validation_rows(s2_channel_filter)
         if not filter_validation.empty:
             mapping.input_validation = pd.concat([filter_validation, mapping.input_validation], ignore_index=True)
@@ -1328,9 +1353,10 @@ with st.sidebar:
     cache_cols = st.columns(2)
     cache_cols[0].metric("현재 S2 기준 행", f"{current_cache['rows']:,}")
     cache_cols[1].metric("S2 ID", f"{current_cache['sales_channel_content_id_nonblank']:,}")
-    guard_cols = st.columns(2)
+    guard_cols = st.columns(3)
     guard_cols[0].metric("누락 guard", f"{lookup_row_count(S2_MISSING_LOOKUP):,}")
     guard_cols[1].metric("청구 guard", f"{lookup_row_count(S2_BILLING_LOOKUP):,}")
+    guard_cols[2].metric("콘텐츠 lookup", f"{lookup_row_count(S2_SERVICE_CONTENTS_LOOKUP):,}")
 
 
 st.markdown('<div class="workflow-caption">정산서 업로드 -> 판매채널 확인 -> S2 매핑 -> 다운로드</div>', unsafe_allow_html=True)

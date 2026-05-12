@@ -77,6 +77,7 @@ python -m py_compile app.py mapping_core.py matching_rules.py
 
 - `data/s2_payment_missing_lookup.csv`: S2 `정산정보 누락 건`(`/stm/stm`) 소설 전체. 이 판매채널콘텐츠ID는 S2 매핑 후보에서 제외합니다.
 - `data/s2_billing_settlement_lookup.csv`: S2 `[5467] 정산정보(청구)관리`(`/mst/setl/req-setl`) 전체. 지급정산 no-match 행과 판매채널명+정제 제목이 맞으면 `청구정산 후보`로 리포트에 표시합니다.
+- `data/s2_sales_channel_content_lookup.csv`: S2 `판매채널콘텐츠 조회`(`/sale/ext/ext-salm/schn-ctns`) 소설 대상. 지급정산 매칭 후보로 쓰지 않고, no-match 행의 “같은 채널 판매채널콘텐츠 있음 / 지급정산 없음” 근거로만 표시합니다.
 - 수동 S2 업로드에도 guard를 적용하지만, 수동 업로드는 예외 모드입니다. 운영 기본값은 관리자 배포 S2 기준 사용입니다.
 
 매핑 리포트는 같은 정제키에 S2 후보가 여러 개 있으면 최신 등록일자 후보를 보여주되, S2 전송자료는 `S2_후보수 > 1` 행을 차단합니다.
@@ -98,6 +99,12 @@ python scripts\refresh_kiss_payment_settlement.py --mode full-replace --lookup-o
 
 ```powershell
 python scripts\refresh_s2_reference_guards.py --page-size 1000000 --content-style-code 102
+```
+
+판매채널콘텐츠 정보 lookup만 따로 갱신하려면 아래처럼 실행합니다.
+
+```powershell
+python scripts\refresh_s2_sales_channel_contents.py --content-style-code 102
 ```
 
 갱신 뒤 Cloud 기준을 바꾸려면 아래 파일을 커밋/푸시합니다.
