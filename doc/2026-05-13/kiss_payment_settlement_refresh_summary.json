@@ -1,0 +1,70 @@
+{
+  "source_rows": 141733,
+  "cache_rows_before": 141732,
+  "cache_rows_after": 141733,
+  "s2_lookup_rows": 124755,
+  "s2_change_added": 0,
+  "s2_change_deleted": 0,
+  "s2_change_modified": 0,
+  "output_cache": "C:\\Users\\User\\Desktop\\mapping-novel\\data\\kiss_payment_settlement_cache.csv",
+  "output_cache_parts": [
+    "C:\\Users\\User\\Desktop\\mapping-novel\\data\\kiss_payment_settlement_cache_part_001.csv",
+    "C:\\Users\\User\\Desktop\\mapping-novel\\data\\kiss_payment_settlement_cache_part_002.csv"
+  ],
+  "output_s2_lookup": "C:\\Users\\User\\Desktop\\mapping-novel\\data\\kiss_payment_settlement_s2_lookup.csv",
+  "summary": {
+    "rows": 141733,
+    "columns": 52,
+    "content_shape_counts": {
+      "소설": 141733
+    },
+    "approval_status_counts": {
+      "승인": 138103,
+      "미승인": 3618,
+      "승인취소": 12
+    },
+    "payment_settlement_status_counts": {
+      "운영중": 140941,
+      "종료": 681,
+      "콘텐츠확인필요": 99,
+      "거래처확인필요": 12
+    },
+    "top_channel_counts": {
+      "봄툰KR(1068149784)": 13107,
+      "원스토어(소설)": 11280,
+      "미스터블루(소설)": 10850,
+      "판무림": 10531,
+      "한아름(P000003716)": 8410,
+      "Yes24(서점)": 4596,
+      "인터파크": 4264,
+      "리디북스(이벤트)": 4225,
+      "웹소설 하이북": 4061,
+      "북큐브(소설)": 4044,
+      "구글(소설)": 3934,
+      "네이버_일반": 3794,
+      "교보문고(소설)": 3733,
+      "무툰(소설 서비스)": 3412,
+      "한국이퍼브": 3371,
+      "네이버_장르(광고수익)": 3275,
+      "유페이퍼": 3061,
+      "누온": 2854,
+      "스토린랩(원스토어)": 2405,
+      "리디북스(소설)": 2287
+    },
+    "content_id_nonblank": 141733,
+    "content_id_unique": 28312,
+    "sales_channel_content_id_nonblank": 141554,
+    "sales_channel_content_id_unique": 124755,
+    "registered_at_min": "2024-12-31T12:00:00",
+    "registered_at_max": "2026-05-12T13:58:58",
+    "sales_channel_content_id_duplicate_keys": 12045,
+    "sales_channel_content_id_multiple_titles": 1,
+    "sales_channel_content_id_multiple_master_ids": 12045,
+    "sales_channel_content_id_multiple_content_ids": 1,
+    "s2_change_summary": {
+      "added": 0,
+      "deleted": 0,
+      "modified": 0
+    }
+  }
+}
