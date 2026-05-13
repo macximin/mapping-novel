@@ -1,0 +1,8 @@
+﻿metric,value
+channel_key_groups,484
+rows,5807
+unique_title_keys,259
+title_keys_ge_10_rows,38
+rows_in_title_keys_ge_10,5383
+content_master_fuzzy_overlay_groups,14
+content_master_fuzzy_overlay_rows,1534

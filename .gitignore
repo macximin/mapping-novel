@@ -14,6 +14,11 @@ venv/
 .tmp_kiss_assets/
 temp/
 ignore/
+igignore/
+*.local.env
+/*.csv
+/*.xlsx
+/*.zip
 data/kiss_payment_settlement_cache*.csv
 !data/kiss_payment_settlement_cache.csv
 !data/kiss_payment_settlement_cache_part_*.csv
