@@ -97,6 +97,7 @@ function Publish-RefreshArtifacts {
     }
 
     Invoke-GitStep "Git commit S2 refresh artifacts" (@("commit", "-m", "Refresh S2 lookup data $today", "--") + $artifactPaths)
+    Invoke-GitStep "Git rebase latest main before push" @("pull", "--rebase", "origin", "main")
     Invoke-GitStep "Git push S2 refresh artifacts" @("push", "origin", "main")
 }
 
