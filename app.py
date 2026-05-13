@@ -17,6 +17,12 @@ import pandas as pd
 import streamlit as st
 
 from batch_reports import build_combined_mapping_report_frame, build_pd_work_order_report_frame
+from clickup_notifications import (
+    ClickUpNotificationError,
+    build_clickup_config,
+    create_s2_refresh_request_task,
+    normalize_clickup_secret_values,
+)
 from kiss_refresh_history import latest_refresh_runs, latest_s2_refresh_changes
 from kiss_payment_settlement import load_payment_settlement_list, summarize_payment_settlement, to_s2_lookup
 from cleaning_rules import drop_disabled_rows, text
@@ -79,6 +85,7 @@ S2_FAST_PAGE_SIZE = "1000000"
 S2_NOVEL_CONTENT_STYLE_CODE = "102"
 S2_PAYMENT_MANAGEMENT_URL = "https://kiss.kld.kr/mst/stmi/pymt-setl"
 S2_DAILY_REFRESH_TIME_LABEL = "매일 10:00"
+STREAMLIT_CLOUD_APP_URL = "https://mapping-novel-ascmdzm897irzyvzwn9kqo.streamlit.app/"
 KST = timezone(timedelta(hours=9))
 AUTO_PLATFORM_OPTION = "엑셀 파일명으로 자동감지"
 S2_SESSION_USERNAME_KEY = "s2_session_username"
@@ -164,6 +171,22 @@ def streamlit_s2_secret_values() -> dict[str, str]:
         return normalize_s2_secret_values(st.secrets)
     except (FileNotFoundError, KeyError, RuntimeError):
         return {}
+
+
+def streamlit_clickup_secret_values() -> dict[str, Any]:
+    try:
+        return normalize_clickup_secret_values(st.secrets)
+    except (FileNotFoundError, KeyError, RuntimeError):
+        return {}
+
+
+def clickup_notification_config():
+    config_values: dict[str, Any] = {}
+    config_values.update(read_env_file(S2_ENV_FILE))
+    config_values.update(dict(os.environ))
+    config_values.update(streamlit_clickup_secret_values())
+    config_values.setdefault("CLICKUP_APP_URL", STREAMLIT_CLOUD_APP_URL)
+    return build_clickup_config(config_values)
 
 
 def session_s2_login_values() -> dict[str, str]:
@@ -1607,6 +1630,10 @@ with st.sidebar:
     repo_baseline = repo_s2_baseline_summary()
     baseline_updated_at = repo_s2_baseline_updated_at(repo_baseline) if repo_baseline else ""
     usage_label, usage_tone = s2_usage_status(baseline_updated_at, current_cache["rows"])
+    missing_guard_rows = lookup_row_count(S2_MISSING_LOOKUP)
+    billing_guard_rows = lookup_row_count(S2_BILLING_LOOKUP)
+    service_content_rows = lookup_row_count(S2_SERVICE_CONTENTS_LOOKUP)
+    clickup_config = clickup_notification_config()
     render_s2_status_card(baseline_updated_at, usage_label, usage_tone)
     st.caption("*매일 10시에 정규 업데이트됩니다.")
 
@@ -1620,9 +1647,41 @@ with st.sidebar:
     cache_cols[0].metric("현재 S2 기준 행", f"{current_cache['rows']:,}")
     cache_cols[1].metric("S2 ID", f"{current_cache['sales_channel_content_id_nonblank']:,}")
     guard_cols = st.columns(3)
-    guard_cols[0].metric("누락 guard", f"{lookup_row_count(S2_MISSING_LOOKUP):,}")
-    guard_cols[1].metric("청구 guard", f"{lookup_row_count(S2_BILLING_LOOKUP):,}")
-    guard_cols[2].metric("콘텐츠 lookup", f"{lookup_row_count(S2_SERVICE_CONTENTS_LOOKUP):,}")
+    guard_cols[0].metric("누락 guard", f"{missing_guard_rows:,}")
+    guard_cols[1].metric("청구 guard", f"{billing_guard_rows:,}")
+    guard_cols[2].metric("콘텐츠 lookup", f"{service_content_rows:,}")
+
+    request_clicked = st.button(
+        "관리자에게 S2 최신화 요청",
+        type="secondary",
+        use_container_width=True,
+        disabled=not clickup_config.is_configured,
+    )
+    if request_clicked:
+        try:
+            with st.spinner("관리자에게 요청 보내는 중..."):
+                clickup_result = create_s2_refresh_request_task(
+                    clickup_config,
+                    updated_at=baseline_updated_at,
+                    usage_label=usage_label,
+                    s2_rows=current_cache["rows"],
+                    s2_id_rows=current_cache["sales_channel_content_id_nonblank"],
+                    missing_guard_rows=missing_guard_rows,
+                    billing_guard_rows=billing_guard_rows,
+                    service_content_rows=service_content_rows,
+                    requested_at=datetime.now(KST),
+                )
+            st.success("S2 최신화 요청을 보냈습니다.")
+            if clickup_result.url:
+                st.markdown(f"[ClickUp에서 보기]({clickup_result.url})")
+        except ClickUpNotificationError as exc:
+            st.error("ClickUp 요청 전송에 실패했습니다.")
+            st.caption(str(exc))
+        except Exception as exc:
+            st.error("ClickUp 요청 전송에 실패했습니다.")
+            render_error_detail(exc)
+    if not clickup_config.is_configured:
+        st.caption("ClickUp 알림 secrets를 설정하면 이 버튼이 활성화됩니다.")
 
 
 st.markdown('<div class="workflow-caption">정산서 업로드 -> 판매채널 확인 -> S2 매핑 -> 다운로드</div>', unsafe_allow_html=True)

@@ -27,6 +27,16 @@ S2 기준은 사내망 PC의 자동 작업으로 매일 10:00 최신화한 뒤 r
 
 S2 API 접속 정보는 Streamlit Cloud Secrets에 넣지 않습니다. 관리자 로컬 CLI에서만 `.env`를 사용합니다. 실제 접속 정보는 git에 올리지 않습니다.
 
+사이드바의 `관리자에게 S2 최신화 요청` 버튼은 ClickUp 태스크를 생성합니다. 사용자는 로그인 없이 버튼만 누르고, 관리자는 ClickUp 모바일 알림으로 요청을 받습니다. Streamlit Cloud Secrets에는 아래 값만 넣습니다.
+
+```toml
+[clickup]
+api_token = "..."
+list_id = "..."
+assignee_ids = "" # 비우면 토큰 소유자를 자동 조회해 담당자로 넣습니다.
+app_url = "https://mapping-novel-ascmdzm897irzyvzwn9kqo.streamlit.app/"
+```
+
 S2 API가 사내망, VPN, 방화벽 또는 IP 허용 목록으로 제한되어 있으면 Streamlit Cloud에서는 ID/PW가 맞아도 최신화가 실패할 수 있습니다. 이때 로그가 `ConnectTimeout`, `Max retries exceeded`, `timed out`이면 인증 문제가 아니라 Cloud 서버에서 S2 API까지 네트워크 연결이 되지 않는 상태입니다. 이 경우 사내망에서 실행 가능한 서버를 쓰거나, 개발팀에 조회 전용 API/스냅샷/허용 IP 정책을 별도로 요청해야 합니다.
 
 ## 현재 동작
