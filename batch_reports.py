@@ -99,6 +99,10 @@ def build_combined_mapping_report_frame(results: list[dict[str, Any]]) -> pd.Dat
 
 def build_pd_work_order_report_frame(results: list[dict[str, Any]]) -> pd.DataFrame:
     combined = build_combined_mapping_report_frame(results)
+    return build_pd_work_order_report_frame_from_combined(combined)
+
+
+def build_pd_work_order_report_frame_from_combined(combined: pd.DataFrame) -> pd.DataFrame:
     if combined.empty:
         return pd.DataFrame(columns=WORK_ORDER_COLUMNS)
 

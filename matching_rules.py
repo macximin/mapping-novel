@@ -55,6 +55,14 @@ class S2ChannelFilterResult:
         return f"S2 판매채널 필터: {self.row_delta_label}행 ({channels})"
 
 
+@dataclass(frozen=True)
+class S2SalesChannelFilterCache:
+    frame: pd.DataFrame
+    before_rows: int
+    has_channel_column: bool
+    frames_by_channel: dict[str, pd.DataFrame]
+
+
 class S2ChannelPolicy:
     def filter_by_sales_channel(
         self,
@@ -327,6 +335,89 @@ def _explicit_s2_channel_from_filename(filename: str) -> S2SalesChannelDetection
 
 
 DEFAULT_S2_CHANNEL_POLICY = S2ChannelPolicy()
+
+
+def build_s2_sales_channel_filter_cache(frame: pd.DataFrame) -> S2SalesChannelFilterCache:
+    if frame.empty or S2_CHANNEL_COLUMN not in frame.columns:
+        return S2SalesChannelFilterCache(
+            frame=frame,
+            before_rows=len(frame),
+            has_channel_column=S2_CHANNEL_COLUMN in frame.columns,
+            frames_by_channel={},
+        )
+    working = frame.copy()
+    channels = working[S2_CHANNEL_COLUMN].map(text)
+    frames_by_channel: dict[str, pd.DataFrame] = {}
+    for channel, group in working.groupby(channels, dropna=False, sort=False):
+        channel_text = text(channel)
+        if channel_text:
+            frames_by_channel[channel_text] = group.reset_index(drop=True)
+    return S2SalesChannelFilterCache(
+        frame=frame,
+        before_rows=len(frame),
+        has_channel_column=True,
+        frames_by_channel=frames_by_channel,
+    )
+
+
+def filter_s2_by_sales_channel_cache(
+    cache: S2SalesChannelFilterCache,
+    *,
+    sales_channel: str,
+    source_name: str = "",
+) -> S2ChannelFilterResult:
+    normalized_channel = text(sales_channel)
+    normalized_source = text(source_name)
+    if cache.before_rows <= 0:
+        return S2ChannelFilterResult(
+            frame=cache.frame.copy(),
+            platform="",
+            source_name=normalized_source,
+            before_rows=0,
+            after_rows=0,
+            matched_channels=(),
+            rule_label=normalized_channel,
+            active=False,
+            reason="S2 기준이 비어 있어 판매채널 필터를 건너뜁니다.",
+        )
+    if not cache.has_channel_column:
+        return S2ChannelFilterResult(
+            frame=cache.frame.copy(),
+            platform="",
+            source_name=normalized_source,
+            before_rows=cache.before_rows,
+            after_rows=cache.before_rows,
+            matched_channels=(),
+            rule_label=normalized_channel,
+            active=False,
+            reason="S2 기준에 판매채널명 컬럼이 없어 판매채널 필터를 건너뜁니다.",
+        )
+    if not normalized_channel:
+        return S2ChannelFilterResult(
+            frame=cache.frame.copy(),
+            platform="",
+            source_name=normalized_source,
+            before_rows=cache.before_rows,
+            after_rows=cache.before_rows,
+            matched_channels=(),
+            rule_label="",
+            active=False,
+            reason="파일명에서 S2 판매채널명을 찾지 못해 판매채널 필터를 건너뜁니다.",
+        )
+
+    filtered = cache.frames_by_channel.get(normalized_channel)
+    if filtered is None:
+        filtered = cache.frame.iloc[0:0].copy()
+    return S2ChannelFilterResult(
+        frame=filtered.copy(),
+        platform=platform_for_s2_sales_channel(normalized_channel) or "",
+        source_name=normalized_source,
+        before_rows=cache.before_rows,
+        after_rows=len(filtered),
+        matched_channels=(normalized_channel,) if len(filtered) else (),
+        rule_label=normalized_channel,
+        active=True,
+    )
 
 
 def filter_s2_by_platform(frame: pd.DataFrame, *, platform: str, source_name: str = "") -> S2ChannelFilterResult:

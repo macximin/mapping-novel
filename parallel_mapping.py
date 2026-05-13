@@ -9,6 +9,7 @@ from typing import Any, Callable, Sequence
 
 
 MAPPING_PARALLEL_WORKERS_ENV = "MAPPING_PARALLEL_WORKERS"
+MAPPING_PARALLEL_WORKERS_MAX_ENV = "MAPPING_PARALLEL_WORKERS_MAX"
 DEFAULT_MAPPING_WORKERS = 2
 MAX_MAPPING_WORKERS = 2
 
@@ -37,6 +38,16 @@ ProgressHandler = Callable[[ProgressEvent], None]
 ResultHandler = Callable[[dict[str, Any]], None]
 
 
+def _env_int(name: str, default: int) -> int:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
 def resolve_mapping_worker_count(file_count: int, env_value: str | None = None) -> int:
     if file_count <= 1:
         return 1
@@ -49,7 +60,8 @@ def resolve_mapping_worker_count(file_count: int, env_value: str | None = None) 
             requested = int(raw)
         except ValueError:
             return 1
-    return max(1, min(requested, MAX_MAPPING_WORKERS, file_count))
+    max_workers = _env_int(MAPPING_PARALLEL_WORKERS_MAX_ENV, MAX_MAPPING_WORKERS) if env_value is None else MAX_MAPPING_WORKERS
+    return max(1, min(requested, max_workers, file_count))
 
 
 def snapshot_uploaded_file(uploaded_file: object) -> NamedBytesIO:

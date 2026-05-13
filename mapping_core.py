@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
@@ -70,6 +71,15 @@ class MappingResult:
     input_validation: pd.DataFrame
 
 
+@dataclass(frozen=True)
+class S2MappingReference:
+    frame: pd.DataFrame
+    title_col: str
+    id_col: str
+    candidates: pd.DataFrame
+    index: dict[str, dict[str, str]]
+
+
 def pick_column(candidates: Iterable[str], df: pd.DataFrame, label: str) -> str:
     for column in candidates:
         if column in df.columns:
@@ -129,10 +139,11 @@ def _candidate_index(
     working = df.copy()
     working[id_col] = working[id_col].map(text)
     working[title_col] = working[title_col].map(text)
+    parsed_date_cols = _precompute_auto_select_dates(working)
 
     has_key = working[key_col].map(bool).astype(bool)
     for key, group in working.loc[has_key].groupby(key_col, dropna=False):
-        group, auto_select_date_col = _sort_candidates_for_auto_selection(group)
+        group, auto_select_date_col = _sort_candidates_for_auto_selection(group, parsed_date_cols=parsed_date_cols)
         ids = [value for value in dict.fromkeys(group[id_col].map(text)) if value]
         titles = [value for value in dict.fromkeys(group[title_col].map(text)) if value]
         selected_date = text(group.iloc[0][auto_select_date_col]) if auto_select_date_col and not group.empty else ""
@@ -160,7 +171,38 @@ def _candidate_index(
     return candidates, lookup
 
 
-def _sort_candidates_for_auto_selection(group: pd.DataFrame) -> tuple[pd.DataFrame, str]:
+def _precompute_auto_select_dates(frame: pd.DataFrame) -> list[tuple[str, str]]:
+    parsed_cols: list[tuple[str, str]] = []
+    for idx, column in enumerate(AUTO_SELECT_DATE_COL_CAND):
+        if column not in frame.columns:
+            continue
+        parsed_col = f"_자동선택일자_parsed_{idx}"
+        frame[parsed_col] = pd.to_datetime(frame[column], errors="coerce")
+        parsed_cols.append((column, parsed_col))
+    return parsed_cols
+
+
+def _sort_candidates_for_auto_selection(
+    group: pd.DataFrame,
+    *,
+    parsed_date_cols: list[tuple[str, str]] | None = None,
+) -> tuple[pd.DataFrame, str]:
+    if parsed_date_cols is not None:
+        for column, parsed_col in parsed_date_cols:
+            if column not in group.columns or parsed_col not in group.columns:
+                continue
+            parsed = group[parsed_col]
+            if not parsed.notna().any():
+                continue
+            ordered = group.assign(_자동선택일자=parsed, _자동선택일자있음=parsed.notna())
+            ordered = ordered.sort_values(
+                by=["_자동선택일자있음", "_자동선택일자"],
+                ascending=[False, False],
+                kind="stable",
+            )
+            return ordered.drop(columns=["_자동선택일자", "_자동선택일자있음"]), column
+        return group, ""
+
     for column in AUTO_SELECT_DATE_COL_CAND:
         if column not in group.columns:
             continue
@@ -221,49 +263,36 @@ def _duplicate_candidate_count(candidates: pd.DataFrame) -> int:
 
 
 def _review_reason(row: pd.Series) -> str:
+    return _review_reason_values(row["정제_상품명"], row["S2_매칭상태"], row["IPS_매칭상태"])
+
+
+def _review_reason_values(cleaned_title: Any, s2_status: Any, ips_status: Any) -> str:
     reasons: list[str] = []
-    if row["정제_상품명"] == "":
+    if text(cleaned_title) == "":
         reasons.append("정산서 상품명 정제키 없음")
-    if row["S2_매칭상태"] == MATCH_NONE:
+    s2_status_text = text(s2_status)
+    ips_status_text = text(ips_status)
+    if s2_status_text == MATCH_NONE:
         reasons.append("S2 미매핑")
-    elif row["S2_매칭상태"] == MATCH_AMBIGUOUS:
+    elif s2_status_text == MATCH_AMBIGUOUS:
         reasons.append("S2 중복 후보")
-    elif row["S2_매칭상태"] == MATCH_BLANK:
+    elif s2_status_text == MATCH_BLANK:
         reasons.append("S2 매칭 불가")
-    if row["IPS_매칭상태"] == MATCH_NONE:
+    if ips_status_text == MATCH_NONE:
         reasons.append("IPS 미매핑")
-    elif row["IPS_매칭상태"] == MATCH_AMBIGUOUS:
+    elif ips_status_text == MATCH_AMBIGUOUS:
         reasons.append("IPS 중복 후보")
-    elif row["IPS_매칭상태"] == MATCH_BLANK:
+    elif ips_status_text == MATCH_BLANK:
         reasons.append("IPS 매칭 불가")
     return " | ".join(reasons)
 
 
-def build_mapping(
-    s2_df: pd.DataFrame,
-    settlement_df: pd.DataFrame,
-    master_df: pd.DataFrame | None = None,
-) -> MappingResult:
-    s2_df = drop_disabled_rows(s2_df)
-    master_df = drop_disabled_rows(master_df) if master_df is not None else None
-
-    s2_title_col = pick_column(S2_TITLE_COL_CAND, s2_df, "S2 콘텐츠명")
-    s2_id_col = pick_column(S2_ID_COL_CAND, s2_df, "S2 판매채널콘텐츠ID")
-    settlement_title_col = pick_column(SETTLEMENT_TITLE_COL_CAND, settlement_df, "정산서 상품명")
-    use_ips = master_df is not None and not master_df.empty
-    master_title_col = pick_column(MASTER_TITLE_COL_CAND, master_df, "IPS 콘텐츠명") if use_ips else ""
-    master_id_col = pick_column(MASTER_ID_COL_CAND, master_df, "IPS 콘텐츠ID") if use_ips else ""
-
-    s2 = s2_df.copy()
-    settlement = settlement_df.copy()
-    master = master_df.copy() if use_ips else pd.DataFrame()
-
+def build_s2_mapping_reference(s2_df: pd.DataFrame) -> S2MappingReference:
+    s2 = drop_disabled_rows(s2_df)
+    s2_title_col = pick_column(S2_TITLE_COL_CAND, s2, "S2 콘텐츠명")
+    s2_id_col = pick_column(S2_ID_COL_CAND, s2, "S2 판매채널콘텐츠ID")
+    s2 = s2.copy()
     s2["_정제키"] = s2[s2_title_col].map(clean_title)
-    settlement["_정제키"] = settlement[settlement_title_col].map(clean_title)
-    if use_ips:
-        master["_추출작품명"] = master[master_title_col].map(extract_master_work_title)
-        master["_정제키"] = master[master_title_col].map(clean_master_title)
-
     s2_candidates, s2_index = _candidate_index(
         s2,
         source="S2",
@@ -272,6 +301,45 @@ def build_mapping(
         title_col=s2_title_col,
         extra_cols=[col for col in ["판매채널명", "판매채널ID", "콘텐츠ID"] if col in s2.columns],
     )
+    return S2MappingReference(
+        frame=s2,
+        title_col=s2_title_col,
+        id_col=s2_id_col,
+        candidates=s2_candidates,
+        index=s2_index,
+    )
+
+
+def build_mapping(
+    s2_df: pd.DataFrame,
+    settlement_df: pd.DataFrame,
+    master_df: pd.DataFrame | None = None,
+    *,
+    s2_reference: S2MappingReference | None = None,
+) -> MappingResult:
+    s2_df = drop_disabled_rows(s2_df)
+    master_df = drop_disabled_rows(master_df) if master_df is not None else None
+
+    if s2_reference is None:
+        s2_reference = build_s2_mapping_reference(s2_df)
+    s2 = s2_reference.frame
+    s2_title_col = s2_reference.title_col
+    s2_id_col = s2_reference.id_col
+    settlement_title_col = pick_column(SETTLEMENT_TITLE_COL_CAND, settlement_df, "정산서 상품명")
+    use_ips = master_df is not None and not master_df.empty
+    master_title_col = pick_column(MASTER_TITLE_COL_CAND, master_df, "IPS 콘텐츠명") if use_ips else ""
+    master_id_col = pick_column(MASTER_ID_COL_CAND, master_df, "IPS 콘텐츠ID") if use_ips else ""
+
+    settlement = settlement_df.copy()
+    master = master_df.copy() if use_ips else pd.DataFrame()
+
+    settlement["_정제키"] = settlement[settlement_title_col].map(clean_title)
+    if use_ips:
+        master["_추출작품명"] = master[master_title_col].map(extract_master_work_title)
+        master["_정제키"] = master[master_title_col].map(clean_master_title)
+
+    s2_candidates = s2_reference.candidates
+    s2_index = s2_reference.index
     if use_ips:
         master_candidates, master_index = _candidate_index(
             master,
@@ -315,7 +383,14 @@ def build_mapping(
         result["IPS_후보ID목록"] = ""
         result["IPS_후보콘텐츠명목록"] = ""
 
-    result["검토필요사유"] = result.apply(_review_reason, axis=1)
+    result["검토필요사유"] = [
+        _review_reason_values(cleaned_title, s2_status, ips_status)
+        for cleaned_title, s2_status, ips_status in zip(
+            result["정제_상품명"],
+            result["S2_매칭상태"],
+            result["IPS_매칭상태"],
+        )
+    ]
     result["검토필요(Y/N)"] = result["검토필요사유"].map(lambda value: "Y" if text(value) else "N")
 
     original_cols = [col for col in settlement_df.columns if col not in result.columns]
@@ -426,8 +501,25 @@ def _build_summary(
     return pd.DataFrame(rows, columns=["항목", "값"])
 
 
+def _export_width_sample_rows() -> int:
+    raw = os.environ.get("MAPPING_EXPORT_WIDTH_SAMPLE_ROWS", "500")
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return 500
+
+
+def _worksheet_column_width(ws: Any, column_idx: int, sample_rows: int) -> int:
+    max_row = ws.max_row if sample_rows <= 0 else min(ws.max_row, sample_rows + 1)
+    max_len = 0
+    for row_idx in range(1, max_row + 1):
+        max_len = max(max_len, len(text(ws.cell(row=row_idx, column=column_idx).value)))
+    return min(max(max_len + 2, 10), 70)
+
+
 def export_mapping(result: MappingResult) -> bytes:
     buffer = io.BytesIO()
+    width_sample_rows = _export_width_sample_rows()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
         result.summary.to_excel(writer, sheet_name="요약", index=False)
         result.input_validation.to_excel(writer, sheet_name="입력검증", index=False)
@@ -457,7 +549,10 @@ def export_mapping(result: MappingResult) -> bytes:
                         if text(row[reason_col - 1].value) == "Y":
                             for cell in row:
                                 cell.fill = warning_fill
-            for idx, column_cells in enumerate(ws.columns, start=1):
-                max_len = max(len(text(cell.value)) for cell in column_cells)
-                ws.column_dimensions[get_column_letter(idx)].width = min(max(max_len + 2, 10), 70)
+            for idx in range(1, ws.max_column + 1):
+                ws.column_dimensions[get_column_letter(idx)].width = _worksheet_column_width(
+                    ws,
+                    idx,
+                    width_sample_rows,
+                )
     return buffer.getvalue()

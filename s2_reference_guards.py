@@ -106,6 +106,15 @@ class S2GuardFilterResult:
         return len(self.excluded_rows)
 
 
+@dataclass(frozen=True)
+class S2GuardRuntimeContext:
+    missing_index: dict[tuple[str, str], dict[str, str | int]]
+    billing_index: dict[tuple[str, str], dict[str, str | int]]
+    service_index: dict[tuple[str, str], dict[str, str | int]]
+    payment_by_key: dict[str, dict[str, str | int]]
+    master_by_key: dict[str, dict[str, str | int]]
+
+
 def id_text(value: Any) -> str:
     raw = text(value)
     if raw.endswith(".0"):
@@ -286,6 +295,36 @@ def apply_missing_exclusions(s2_frame: pd.DataFrame, guards: S2ReferenceGuards) 
     return S2GuardFilterResult(frame=kept, excluded_rows=excluded, input_validation=_guard_validation(guards, len(excluded)))
 
 
+def build_s2_guard_runtime_context(
+    guards: S2ReferenceGuards,
+    *,
+    s2_all_frame: pd.DataFrame | None = None,
+    master_df: pd.DataFrame | None = None,
+) -> S2GuardRuntimeContext:
+    return S2GuardRuntimeContext(
+        missing_index=_index_by_channel_and_key(
+            guards.missing,
+            channel_col="판매채널명",
+            key_col="정제_콘텐츠명",
+            fields=["판매채널콘텐츠ID", "콘텐츠ID", "콘텐츠명"],
+        ),
+        billing_index=_index_by_channel_and_key(
+            guards.billing,
+            channel_col="판매채널명",
+            key_col="정제_대표콘텐츠명",
+            fields=["청구정산마스터ID", "계약ID", "대표콘텐츠명"],
+        ),
+        service_index=_index_by_channel_and_key(
+            guards.service_contents,
+            channel_col="판매채널명",
+            key_col="정제_콘텐츠명",
+            fields=["판매채널콘텐츠ID", "콘텐츠ID", "콘텐츠명"],
+        ),
+        payment_by_key=_s2_payment_index_by_key(s2_all_frame),
+        master_by_key=_master_index_by_key(master_df),
+    )
+
+
 def annotate_mapping_result(
     mapping: MappingResult,
     guards: S2ReferenceGuards,
@@ -293,32 +332,23 @@ def annotate_mapping_result(
     sales_channel: str,
     s2_all_frame: pd.DataFrame | None = None,
     master_df: pd.DataFrame | None = None,
+    runtime_context: S2GuardRuntimeContext | None = None,
 ) -> MappingResult:
     rows = mapping.rows.copy()
     if rows.empty:
         return mapping
 
     channel = text(sales_channel)
-    missing_index = _index_by_channel_and_key(
-        guards.missing,
-        channel_col="판매채널명",
-        key_col="정제_콘텐츠명",
-        fields=["판매채널콘텐츠ID", "콘텐츠ID", "콘텐츠명"],
+    runtime_context = runtime_context or build_s2_guard_runtime_context(
+        guards,
+        s2_all_frame=s2_all_frame,
+        master_df=master_df,
     )
-    billing_index = _index_by_channel_and_key(
-        guards.billing,
-        channel_col="판매채널명",
-        key_col="정제_대표콘텐츠명",
-        fields=["청구정산마스터ID", "계약ID", "대표콘텐츠명"],
-    )
-    service_index = _index_by_channel_and_key(
-        guards.service_contents,
-        channel_col="판매채널명",
-        key_col="정제_콘텐츠명",
-        fields=["판매채널콘텐츠ID", "콘텐츠ID", "콘텐츠명"],
-    )
-    payment_by_key = _s2_payment_index_by_key(s2_all_frame)
-    master_by_key = _master_index_by_key(master_df)
+    missing_index = runtime_context.missing_index
+    billing_index = runtime_context.billing_index
+    service_index = runtime_context.service_index
+    payment_by_key = runtime_context.payment_by_key
+    master_by_key = runtime_context.master_by_key
 
     missing_counts: list[str] = []
     missing_ids: list[str] = []
@@ -334,9 +364,9 @@ def annotate_mapping_result(
     service_ids: list[str] = []
     service_content_ids: list[str] = []
 
-    for _, row in rows.iterrows():
-        key = text(row.get("정제_상품명"))
-        status = text(row.get("S2_매칭상태"))
+    for key_value, status_value in rows[["정제_상품명", "S2_매칭상태"]].itertuples(index=False, name=None):
+        key = text(key_value)
+        status = text(status_value)
         eligible = status != MATCH_OK
         missing = missing_index.get((channel, key), {}) if eligible else {}
         billing = billing_index.get((channel, key), {}) if eligible else {}
@@ -385,7 +415,10 @@ def annotate_mapping_result(
     rows[S2_DETAIL_EVIDENCE_COL] = detail_evidence
     rows[S2_DETAIL_ACTION_COL] = detail_actions
 
-    rows["검토필요사유"] = [_append_reason(row.get("검토필요사유"), row.get("S2_분리사유")) for _, row in rows.iterrows()]
+    rows["검토필요사유"] = [
+        _append_reason(base, addition)
+        for base, addition in zip(rows["검토필요사유"], rows["S2_분리사유"])
+    ]
     rows["검토필요(Y/N)"] = rows["검토필요사유"].map(lambda value: "Y" if text(value) else "N")
 
     missing_candidate_rows = int(pd.to_numeric(rows["S2_정산정보누락_후보수"], errors="coerce").fillna(0).gt(0).sum())

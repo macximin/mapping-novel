@@ -23,6 +23,7 @@ from s2_reference_guards import (
     write_billing_lookup,
     write_missing_lookup,
 )
+from kiss_refresh_history import now_iso
 from scripts.refresh_kiss_payment_settlement import create_authenticated_session, load_env
 
 
@@ -67,6 +68,7 @@ def main() -> None:
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     summary = {
         "created_at": today.isoformat(),
+        "finished_at": now_iso(),
         "content_style_code": args.content_style_code,
         "missing_platform_code": args.platform_code,
         "missing_rows_raw": len(missing_rows),

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import fnmatch
 import io
+import os
 import re
 import unicodedata
 import zipfile
@@ -47,6 +48,7 @@ STANDARD_COLUMNS = [
     "amount_rule_status",
     "s2_gate",
 ]
+SETTLEMENT_READ_ONLY_PLATFORMS_ENV = "SETTLEMENT_READ_ONLY_PLATFORMS"
 
 _PLATFORM_BLOCKED_RAW_COLUMN_KEYWORDS = {
     "로망띠끄": ("isbn",),
@@ -133,18 +135,26 @@ class NormalizationResult:
     rows: pd.DataFrame
     sheet_audits: list[SheetAudit]
 
+    def default_feed_mask(self) -> pd.Series:
+        if self.file_status != "include" or self.spec.blocks_default_feed:
+            return pd.Series(False, index=self.rows.index)
+        if "row_status" not in self.rows.columns:
+            return pd.Series(False, index=self.rows.index)
+        return self.rows["row_status"].eq("data")
+
+    @property
+    def default_feed_row_count(self) -> int:
+        return int(self.default_feed_mask().sum())
+
     @property
     def default_feed_rows(self) -> pd.DataFrame:
-        if self.file_status != "include" or self.spec.blocks_default_feed:
-            return self.rows.iloc[0:0].copy()
-        if "row_status" not in self.rows.columns:
-            return self.rows.iloc[0:0].copy()
-        return self.rows[self.rows["row_status"].eq("data")].copy()
+        return self.rows.loc[self.default_feed_mask()].copy()
 
     def to_mapping_feed(self) -> pd.DataFrame:
-        feed = self.default_feed_rows
-        if feed.empty:
+        feed_mask = self.default_feed_mask()
+        if not bool(feed_mask.any()):
             return pd.DataFrame(columns=[STANDARD_TITLE_COLUMN])
+        feed = self.rows.loc[feed_mask]
         cols = [STANDARD_TITLE_COLUMN, "작가명", "외부콘텐츠ID", "판매금액_후보", "정산기준액_후보", "상계금액_후보"]
         return feed[[col for col in cols if col in feed.columns]].copy()
 
@@ -204,7 +214,7 @@ def adapter_blocking_messages(result: NormalizationResult) -> list[str]:
         messages.append(f"S2 매핑 입력 차단 대상입니다: {result.spec.s2_gate}")
     if result.rows.empty:
         messages.append("어댑터가 데이터 행을 만들지 못했습니다.")
-    elif result.default_feed_rows.empty:
+    elif result.default_feed_row_count <= 0:
         messages.append("파싱은 됐지만 S2 매핑으로 보낼 입력 행이 없습니다.")
     if any(audit.status == "header_not_found" for audit in result.sheet_audits):
         failed = ", ".join(audit.sheet for audit in result.sheet_audits if audit.status == "header_not_found")
@@ -214,16 +224,17 @@ def adapter_blocking_messages(result: NormalizationResult) -> list[str]:
 
 def adapter_warning_messages(result: NormalizationResult) -> list[str]:
     messages: list[str] = []
-    if result.default_feed_rows.empty:
+    feed_rows = result.default_feed_row_count
+    if feed_rows <= 0:
         return messages
 
     parsed_rows = len(result.rows)
-    feed_rows = len(result.default_feed_rows)
     if parsed_rows != feed_rows:
         messages.append(f"파싱 행 {parsed_rows:,}개 중 S2 매핑 입력은 {feed_rows:,}개입니다. 제외/검토 규칙을 확인하세요.")
     if not result.spec.s2_amount_policy_locked:
         messages.append(f"S2 금액 4컬럼 출력은 아직 잠금 전입니다: {result.spec.s2_gate}")
-    if result.default_feed_rows[STANDARD_TITLE_COLUMN].map(text).eq("").any():
+    feed = result.rows.loc[result.default_feed_mask()]
+    if feed[STANDARD_TITLE_COLUMN].map(text).eq("").any():
         messages.append("상품명 빈 행이 남아 있습니다. 제목 컬럼 감지 또는 행 필터를 확인하세요.")
     return messages
 
@@ -269,7 +280,7 @@ def normalize_settlement(
             sheet_audits=[SheetAudit(sheet="", status="excluded_by_rule", note=spec.exclude_rule)],
         )
 
-    workbook = _load_workbook(source)
+    workbook = _load_workbook(source, read_only=_read_only_workbook_enabled(selected_platform))
     parsed: list[pd.DataFrame] = []
     audits: list[SheetAudit] = []
     for sheet in workbook.worksheets:
@@ -302,18 +313,24 @@ def summarize_normalization(result: NormalizationResult) -> dict[str, Any]:
         "parser_contract": result.spec.parser_contract,
         "parsed_rows": len(rows),
         "title_present_rows": title_present,
-        "default_feed_rows": len(result.default_feed_rows),
+        "default_feed_rows": result.default_feed_row_count,
         "amount_rule_status": result.spec.amount_rule_status,
         "s2_amount_policy_locked": result.spec.s2_amount_policy_locked,
         "s2_gate": result.spec.s2_gate,
     }
 
 
-def _load_workbook(source: str | Path | BinaryIO | io.BytesIO):
+def _read_only_workbook_enabled(platform: str) -> bool:
+    raw = os.environ.get(SETTLEMENT_READ_ONLY_PLATFORMS_ENV, "")
+    platforms = {text(value) for value in raw.split(",") if text(value)}
+    return "*" in platforms or text(platform) in platforms
+
+
+def _load_workbook(source: str | Path | BinaryIO | io.BytesIO, *, read_only: bool = False):
     if hasattr(source, "seek"):
         source.seek(0)
     try:
-        return load_workbook(source, data_only=True, read_only=False)
+        return load_workbook(source, data_only=True, read_only=read_only)
     except Exception:
         if hasattr(source, "seek"):
             source.seek(0)
@@ -599,7 +616,8 @@ def _sheet_rows(sheet: Worksheet) -> list[list[Any]]:
     values = [list(row) for row in sheet.iter_rows(values_only=True)]
     if not values:
         return []
-    for merged in sheet.merged_cells.ranges:
+    merged_cells = getattr(sheet, "merged_cells", None)
+    for merged in getattr(merged_cells, "ranges", []):
         min_col, min_row, max_col, max_row = merged.bounds
         top_left = values[min_row - 1][min_col - 1]
         for row_idx in range(min_row - 1, max_row):

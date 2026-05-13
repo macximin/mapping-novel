@@ -410,6 +410,7 @@ def save_summary(path: str | Path, result: PaymentSettlementImportResult) -> Non
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     payload = {
+        "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "source_rows": result.source_rows,
         "cache_rows_before": result.cache_rows_before,
         "cache_rows_after": result.cache_rows_after,

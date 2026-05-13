@@ -16,7 +16,11 @@ from typing import Any, Callable
 import pandas as pd
 import streamlit as st
 
-from batch_reports import build_combined_mapping_report_frame, build_pd_work_order_report_frame
+from batch_reports import (
+    build_combined_mapping_report_frame,
+    build_pd_work_order_report_frame,
+    build_pd_work_order_report_frame_from_combined,
+)
 from clickup_notifications import (
     ClickUpNotificationError,
     build_clickup_config,
@@ -26,10 +30,13 @@ from clickup_notifications import (
 from kiss_refresh_history import latest_refresh_runs, latest_s2_refresh_changes
 from kiss_payment_settlement import load_payment_settlement_list, summarize_payment_settlement, to_s2_lookup
 from cleaning_rules import drop_disabled_rows, text
-from mapping_core import build_mapping, export_mapping, read_first_sheet
+from mapping_core import S2MappingReference, build_mapping, build_s2_mapping_reference, export_mapping, read_first_sheet
 from matching_rules import (
+    S2SalesChannelFilterCache,
+    build_s2_sales_channel_filter_cache,
     detect_s2_sales_channel,
     filter_s2_by_sales_channel,
+    filter_s2_by_sales_channel_cache,
     platform_for_s2_sales_channel,
     s2_filter_validation_rows,
     s2_sales_channel_to_platform,
@@ -50,9 +57,11 @@ from settlement_adapters import (
 from s2_transfer import build_s2_transfer, export_s2_transfer
 from s2_reference_guards import (
     S2GuardFilterResult,
+    S2GuardRuntimeContext,
     S2ReferenceGuards,
     annotate_mapping_result,
     apply_missing_exclusions,
+    build_s2_guard_runtime_context,
     load_s2_reference_guards,
 )
 from s2_auth import (
@@ -84,7 +93,10 @@ S2_REFRESH_START_DATE = date(1900, 1, 1)
 S2_FAST_PAGE_SIZE = "1000000"
 S2_NOVEL_CONTENT_STYLE_CODE = "102"
 S2_PAYMENT_MANAGEMENT_URL = "https://kiss.kld.kr/mst/stmi/pymt-setl"
-S2_DAILY_REFRESH_TIME_LABEL = "매일 10:00"
+S2_DAILY_REFRESH_TIME_LABEL = "매일 12:00, 24:00"
+S2_REFRESH_STALE_AFTER_HOURS = 12
+S2_GUARD_SUMMARY_NAME = "s2_reference_guards_refresh_summary.json"
+S2_SERVICE_CONTENT_SUMMARY_NAME = "s2_sales_channel_contents_refresh_summary.json"
 STREAMLIT_CLOUD_APP_URL = "https://mapping-novel-ascmdzm897irzyvzwn9kqo.streamlit.app/"
 KST = timezone(timedelta(hours=9))
 AUTO_PLATFORM_OPTION = "엑셀 파일명으로 자동감지"
@@ -434,19 +446,25 @@ def history_frame(limit: int = 10) -> pd.DataFrame:
     return frame
 
 
-def repo_s2_baseline_summary() -> dict[str, Any]:
+def repo_refresh_summary(summary_name: str) -> dict[str, Any]:
     doc_dir = ROOT / "doc"
     if not doc_dir.exists():
         return {}
-    for path in sorted(doc_dir.glob(f"*/{S2_BASELINE_SUMMARY_NAME}"), reverse=True):
+    for path in sorted(doc_dir.glob(f"*/{summary_name}"), reverse=True):
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             continue
         summary = payload.get("summary")
+        if not isinstance(summary, dict):
+            summary = payload
         if isinstance(summary, dict):
             return {"path": str(path.relative_to(ROOT)), "payload": payload, "summary": summary}
     return {}
+
+
+def repo_s2_baseline_summary() -> dict[str, Any]:
+    return repo_refresh_summary(S2_BASELINE_SUMMARY_NAME)
 
 
 def git_commit_time_for_path(relative_path: str) -> str:
@@ -472,6 +490,8 @@ def format_update_timestamp(value: object) -> str:
         return ""
     try:
         parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if parsed.tzinfo is not None:
+            parsed = parsed.astimezone(KST)
         return parsed.strftime("%Y-%m-%d %H:%M")
     except ValueError:
         return raw.replace("T", " ")[:16]
@@ -496,6 +516,7 @@ def repo_s2_baseline_updated_at(repo_baseline: dict[str, Any]) -> str:
     summary = repo_baseline.get("summary") or {}
     for candidate in (
         payload.get("finished_at"),
+        payload.get("generated_at"),
         payload.get("created_at"),
         summary.get("generated_at"),
         summary.get("registered_at_max"),
@@ -511,23 +532,120 @@ def repo_s2_baseline_updated_at(repo_baseline: dict[str, Any]) -> str:
     return ""
 
 
-def parse_display_timestamp_date(value: object) -> date | None:
+def repo_summary_updated_at(summary_record: dict[str, Any]) -> str:
+    if not summary_record:
+        return ""
+    relative_path = text(summary_record.get("path"))
+    commit_time = git_commit_time_for_path(relative_path) if relative_path else ""
+    if commit_time:
+        return format_update_timestamp(commit_time)
+    payload = summary_record.get("payload") or {}
+    summary = summary_record.get("summary") or {}
+    for candidate in (
+        payload.get("finished_at"),
+        payload.get("generated_at"),
+        payload.get("created_at"),
+        summary.get("finished_at"),
+        summary.get("generated_at"),
+        summary.get("created_at"),
+    ):
+        formatted = format_update_timestamp(candidate)
+        if formatted:
+            return formatted
+    if relative_path:
+        return file_mtime_timestamp(ROOT / relative_path)
+    return ""
+
+
+def parse_display_timestamp(value: object) -> datetime | None:
     raw = text(value)
     if not raw:
         return None
+    for fmt, size in (("%Y-%m-%d %H:%M", 16), ("%Y-%m-%d", 10)):
+        try:
+            return datetime.strptime(raw[:size], fmt).replace(tzinfo=KST)
+        except ValueError:
+            continue
     try:
-        return datetime.strptime(raw[:10], "%Y-%m-%d").date()
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
     except ValueError:
         return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=KST)
+    return parsed.astimezone(KST)
+
+
+def parse_display_timestamp_date(value: object) -> date | None:
+    parsed = parse_display_timestamp(value)
+    return parsed.date() if parsed is not None else None
 
 
 def s2_usage_status(updated_at: str, row_count: int) -> tuple[str, str]:
     if row_count <= 0:
         return "확인 필요", "warn"
-    updated_date = parse_display_timestamp_date(updated_at)
-    if updated_date == datetime.now(KST).date():
+    updated_dt = parse_display_timestamp(updated_at)
+    if updated_dt is None:
+        return "확인 필요", "warn"
+    if datetime.now(KST) - updated_dt <= timedelta(hours=S2_REFRESH_STALE_AFTER_HOURS):
         return "사용 가능", "ok"
     return "확인 필요", "warn"
+
+
+def int_from_summary(value: object) -> int:
+    try:
+        return int(float(text(value).replace(",", "")))
+    except (TypeError, ValueError):
+        return 0
+
+
+def repo_baseline_s2_lookup_rows(repo_baseline: dict[str, Any]) -> int:
+    if not repo_baseline:
+        return 0
+    payload = repo_baseline.get("payload") or {}
+    summary = repo_baseline.get("summary") or {}
+    for candidate in (
+        payload.get("s2_lookup_rows"),
+        summary.get("s2_lookup_rows"),
+        summary.get("rows"),
+    ):
+        rows = int_from_summary(candidate)
+        if rows:
+            return rows
+    return 0
+
+
+def s2_health_warning_messages(
+    *,
+    repo_baseline: dict[str, Any],
+    current_cache: dict[str, int],
+    guard_summary: dict[str, Any],
+    service_content_summary: dict[str, Any],
+) -> list[str]:
+    messages: list[str] = []
+    expected_rows = repo_baseline_s2_lookup_rows(repo_baseline)
+    actual_rows = safe_int(current_cache.get("rows"))
+    if expected_rows and actual_rows and expected_rows != actual_rows:
+        messages.append(f"S2 summary 행 수({expected_rows:,})와 실제 기준 행 수({actual_rows:,})가 다릅니다.")
+
+    for label, summary_record in (
+        ("guard", guard_summary),
+        ("콘텐츠 lookup", service_content_summary),
+    ):
+        updated_at = repo_summary_updated_at(summary_record)
+        if not summary_record:
+            messages.append(f"{label} 최신화 summary를 찾지 못했습니다.")
+            continue
+        if s2_usage_status(updated_at, 1)[1] != "ok":
+            messages.append(f"{label} 최신화가 {S2_REFRESH_STALE_AFTER_HOURS}시간 기준을 넘겼습니다.")
+
+    service_summary = service_content_summary.get("summary") or {}
+    fetch_failures = int_from_summary(service_summary.get("fetch_failures"))
+    target_missing_channels = int_from_summary(service_summary.get("target_missing_channels"))
+    if fetch_failures:
+        messages.append(f"콘텐츠 lookup fetch 실패 {fetch_failures:,}건이 있습니다.")
+    if target_missing_channels:
+        messages.append(f"콘텐츠 lookup 채널 catalog 누락 {target_missing_channels:,}건이 있습니다.")
+    return messages
 
 
 def s2_source_summary_frame(summary: dict[str, object]) -> pd.DataFrame:
@@ -797,6 +915,31 @@ def s2_id_nonblank_count(frame: pd.DataFrame) -> int:
     return int(frame["판매채널콘텐츠ID"].map(str).str.strip().ne("").sum())
 
 
+def dataframe_csv_bytes(frame: pd.DataFrame) -> bytes:
+    return frame.to_csv(index=False).encode("utf-8-sig")
+
+
+def build_s2_mapping_references_by_channel(
+    *,
+    settlement_files: list[object],
+    selected_s2_channel: str,
+    s2_filter_cache: S2SalesChannelFilterCache,
+) -> dict[str, S2MappingReference]:
+    references: dict[str, S2MappingReference] = {}
+    channels = sorted(
+        {
+            s2_channel_for_file(settlement_file, selected_s2_channel)
+            for settlement_file in settlement_files
+            if s2_channel_for_file(settlement_file, selected_s2_channel)
+        }
+    )
+    for channel in channels:
+        filter_result = filter_s2_by_sales_channel_cache(s2_filter_cache, sales_channel=channel)
+        if filter_result.active:
+            references[channel] = build_s2_mapping_reference(filter_result.frame)
+    return references
+
+
 def build_mapping_session_state(
     *,
     signature: str,
@@ -805,11 +948,39 @@ def build_mapping_session_state(
     s2_source_label: str,
     payment_summary: dict[str, object] | None,
 ) -> dict[str, Any]:
+    stage_seconds: dict[str, float] = {}
     results = ordered_mapping_results(results)
+    stage_started = time.perf_counter()
     summary_frame = batch_summary_frame(results)
-    work_order_frame = build_pd_work_order_report_frame(results)
+    stage_seconds["summary_frame_seconds"] = round(time.perf_counter() - stage_started, 3)
+
+    stage_started = time.perf_counter()
     combined_report_frame = build_combined_mapping_report_frame(results)
+    stage_seconds["combined_report_seconds"] = round(time.perf_counter() - stage_started, 3)
+
+    stage_started = time.perf_counter()
+    work_order_frame = build_pd_work_order_report_frame_from_combined(combined_report_frame)
+    stage_seconds["work_order_report_seconds"] = round(time.perf_counter() - stage_started, 3)
+
+    stage_started = time.perf_counter()
+    summary_csv_bytes = dataframe_csv_bytes(summary_frame)
+    work_order_csv_bytes = dataframe_csv_bytes(work_order_frame)
+    combined_csv_bytes = dataframe_csv_bytes(combined_report_frame)
+    stage_seconds["csv_encode_seconds"] = round(time.perf_counter() - stage_started, 3)
+
     zip_name = f"mapping_results_{datetime.now().strftime('%Y%m%d_%H%M')}.zip"
+    stage_started = time.perf_counter()
+    zip_bytes = build_batch_zip(
+        results,
+        summary_frame,
+        work_order_frame,
+        combined_report_frame,
+        summary_csv_bytes=summary_csv_bytes,
+        work_order_csv_bytes=work_order_csv_bytes,
+        combined_csv_bytes=combined_csv_bytes,
+    )
+    stage_seconds["zip_build_seconds"] = round(time.perf_counter() - stage_started, 3)
+    stage_seconds["postprocess_total_seconds"] = round(sum(stage_seconds.values()), 3)
     return {
         "signature": signature,
         "s2_source_label": s2_source_label,
@@ -817,12 +988,13 @@ def build_mapping_session_state(
         "s2_id_rows": s2_id_nonblank_count(s2_df),
         "payment_summary": payment_summary,
         "summary_frame": summary_frame,
-        "work_order_csv_bytes": work_order_frame.to_csv(index=False).encode("utf-8-sig"),
-        "combined_csv_bytes": combined_report_frame.to_csv(index=False).encode("utf-8-sig"),
+        "work_order_csv_bytes": work_order_csv_bytes,
+        "combined_csv_bytes": combined_csv_bytes,
         "work_order_empty": work_order_frame.empty,
         "combined_report_empty": combined_report_frame.empty,
         "zip_name": zip_name,
-        "zip_bytes": build_batch_zip(results, summary_frame, work_order_frame, combined_report_frame),
+        "zip_bytes": zip_bytes,
+        "postprocess_stage_seconds": stage_seconds,
     }
 
 
@@ -874,6 +1046,7 @@ def mapping_failed_result(
         "started_at": now,
         "finished_at": now,
         "elapsed_seconds": "",
+        "stage_seconds": {},
     }
 
 
@@ -895,6 +1068,9 @@ def process_settlement_batch_item(
     s2_guard_filter: S2GuardFilterResult,
     master_df: pd.DataFrame | None,
     output_stem: str,
+    s2_filter_cache: S2SalesChannelFilterCache | None = None,
+    s2_mapping_references: dict[str, S2MappingReference] | None = None,
+    s2_guard_context: S2GuardRuntimeContext | None = None,
     input_index: int | None = None,
     worker_slot: int | None = None,
     progress_callback: Callable[[str], None] | None = None,
@@ -904,6 +1080,7 @@ def process_settlement_batch_item(
     effective_platform = effective_platform_for_file(settlement_file, selected_s2_channel)
     started_at = datetime.now(KST)
     started_timer = time.perf_counter()
+    stage_seconds: dict[str, float] = {}
     result: dict[str, Any] = {
         "source_name": source_name,
         "output_stem": output_stem,
@@ -921,11 +1098,16 @@ def process_settlement_batch_item(
         "started_at": started_at.isoformat(timespec="seconds"),
         "finished_at": "",
         "elapsed_seconds": "",
+        "stage_seconds": stage_seconds,
     }
+
+    def record_stage(name: str, started: float) -> None:
+        stage_seconds[name] = round(time.perf_counter() - started, 3)
 
     def finish(stage: str) -> dict[str, Any]:
         result["finished_at"] = datetime.now(KST).isoformat(timespec="seconds")
         result["elapsed_seconds"] = round(time.perf_counter() - started_timer, 2)
+        result["stage_seconds"] = stage_seconds
         safe_progress_callback(progress_callback, stage)
         return result
 
@@ -937,15 +1119,19 @@ def process_settlement_batch_item(
         if hasattr(settlement_file, "seek"):
             settlement_file.seek(0)
         safe_progress_callback(progress_callback, "엑셀 정규화 중")
+        stage_started = time.perf_counter()
         adapter_result = normalize_settlement(
             settlement_file,
             platform=effective_platform,
             source_name=source_name,
         )
+        record_stage("normalize_seconds", stage_started)
+        stage_started = time.perf_counter()
         adapter_summary = summarize_normalization(adapter_result)
         audit_df = adapter_audit_dataframe(adapter_result)
         blocking_messages = adapter_blocking_messages(adapter_result)
         warning_messages = adapter_warning_messages(adapter_result)
+        record_stage("adapter_summary_seconds", stage_started)
         info_messages: list[str] = []
         result.update(
             {
@@ -962,9 +1148,20 @@ def process_settlement_batch_item(
             result["error"] = " | ".join(blocking_messages)
             return finish("차단")
 
+        stage_started = time.perf_counter()
         settlement_df = adapter_result.to_mapping_feed()
+        record_stage("mapping_feed_seconds", stage_started)
         safe_progress_callback(progress_callback, "S2 필터/매핑 중")
-        s2_channel_filter = filter_s2_by_sales_channel(s2_df, sales_channel=s2_channel, source_name=source_name)
+        stage_started = time.perf_counter()
+        if s2_filter_cache is not None:
+            s2_channel_filter = filter_s2_by_sales_channel_cache(
+                s2_filter_cache,
+                sales_channel=s2_channel,
+                source_name=source_name,
+            )
+        else:
+            s2_channel_filter = filter_s2_by_sales_channel(s2_df, sales_channel=s2_channel, source_name=source_name)
+        record_stage("s2_filter_seconds", stage_started)
         result["s2_channel_filter"] = s2_channel_filter
         if s2_channel_filter.active and s2_channel_filter.after_rows == 0:
             warning_messages.append(s2_channel_filter.message())
@@ -972,15 +1169,26 @@ def process_settlement_batch_item(
             info_messages.append(s2_channel_filter.message())
         elif s2_channel_filter.reason:
             warning_messages.append(s2_channel_filter.reason)
-        mapping = build_mapping(s2_channel_filter.frame, settlement_df, master_df)
+        stage_started = time.perf_counter()
+        mapping = build_mapping(
+            s2_channel_filter.frame,
+            settlement_df,
+            master_df,
+            s2_reference=(s2_mapping_references or {}).get(s2_channel),
+        )
+        record_stage("build_mapping_seconds", stage_started)
         safe_progress_callback(progress_callback, "guard/전송자료 검증 중")
+        stage_started = time.perf_counter()
         mapping = annotate_mapping_result(
             mapping,
             s2_guards,
             sales_channel=s2_channel,
             s2_all_frame=s2_df,
             master_df=master_df,
+            runtime_context=s2_guard_context,
         )
+        record_stage("guard_annotation_seconds", stage_started)
+        stage_started = time.perf_counter()
         filter_validation = s2_filter_validation_rows(s2_channel_filter)
         if not filter_validation.empty:
             mapping.input_validation = pd.concat([filter_validation, mapping.input_validation], ignore_index=True)
@@ -991,20 +1199,29 @@ def process_settlement_batch_item(
         if s2_channel_filter.active:
             summary["S2 필터 전 행 수"] = s2_channel_filter.before_rows
             summary["S2 필터 후 행 수"] = s2_channel_filter.after_rows
+        record_stage("summary_merge_seconds", stage_started)
+        stage_started = time.perf_counter()
         s2_transfer = build_s2_transfer(
             mapping.rows,
             amount_policy_locked=adapter_result.spec.s2_amount_policy_locked,
             s2_gate=adapter_result.spec.s2_gate,
         )
+        record_stage("transfer_build_seconds", stage_started)
         safe_progress_callback(progress_callback, "결과 엑셀 생성 중")
+        stage_started = time.perf_counter()
+        mapping_bytes = export_mapping(mapping)
+        record_stage("mapping_export_seconds", stage_started)
+        stage_started = time.perf_counter()
+        transfer_bytes = export_s2_transfer(s2_transfer) if s2_transfer.exportable else b""
+        record_stage("transfer_export_seconds", stage_started)
         result.update(
             {
                 "status": "success",
                 "mapping": mapping,
                 "summary": summary,
                 "s2_transfer": s2_transfer,
-                "mapping_bytes": export_mapping(mapping),
-                "transfer_bytes": export_s2_transfer(s2_transfer) if s2_transfer.exportable else b"",
+                "mapping_bytes": mapping_bytes,
+                "transfer_bytes": transfer_bytes,
             }
         )
         return finish("완료")
@@ -1072,6 +1289,18 @@ def process_settlement_files(
 ) -> list[dict[str, Any]]:
     total = len(settlement_files)
     worker_count = resolve_mapping_worker_count(total)
+    progress_slot.caption("S2 필터/guard 인덱스 준비 중")
+    s2_filter_cache = build_s2_sales_channel_filter_cache(s2_df)
+    s2_mapping_references = build_s2_mapping_references_by_channel(
+        settlement_files=settlement_files,
+        selected_s2_channel=selected_s2_channel,
+        s2_filter_cache=s2_filter_cache,
+    )
+    s2_guard_context = build_s2_guard_runtime_context(
+        s2_guards,
+        s2_all_frame=s2_df,
+        master_df=master_df,
+    )
     slot_states: dict[int, dict[str, Any]] = {
         slot: {"index": "", "source_name": "", "stage": "대기"} for slot in range(1, worker_count + 1)
     }
@@ -1126,6 +1355,9 @@ def process_settlement_files(
             s2_guard_filter=s2_guard_filter,
             master_df=master_df,
             output_stem=output_stem,
+            s2_filter_cache=s2_filter_cache,
+            s2_mapping_references=s2_mapping_references,
+            s2_guard_context=s2_guard_context,
             input_index=index,
             worker_slot=slot,
             progress_callback=lambda stage: progress(stage, "running"),
@@ -1195,6 +1427,7 @@ def batch_summary_frame(results: list[dict[str, Any]]) -> pd.DataFrame:
     for result in results:
         adapter_summary = result.get("adapter_summary", {})
         mapping_summary = result.get("summary", {})
+        stage_seconds = result.get("stage_seconds", {}) or {}
         transfer = result.get("s2_transfer")
         transfer_exportable = "Y" if getattr(transfer, "exportable", False) else "N"
         rows.append(
@@ -1217,6 +1450,13 @@ def batch_summary_frame(results: list[dict[str, Any]]) -> pd.DataFrame:
                 "누락 제외": mapping_summary.get("S2 정산정보 누락 제외 행 수", ""),
                 "S2 전송자료": transfer_exportable,
                 "처리초": result.get("elapsed_seconds", ""),
+                "정규화초": stage_seconds.get("normalize_seconds", ""),
+                "S2필터초": stage_seconds.get("s2_filter_seconds", ""),
+                "매핑초": stage_seconds.get("build_mapping_seconds", ""),
+                "guard초": stage_seconds.get("guard_annotation_seconds", ""),
+                "엑셀생성초": stage_seconds.get("mapping_export_seconds", ""),
+                "전송자료초": stage_seconds.get("transfer_build_seconds", ""),
+                "전송엑셀초": stage_seconds.get("transfer_export_seconds", ""),
                 "작업슬롯": result.get("worker_slot", ""),
                 "메시지": result.get("error", ""),
             }
@@ -1237,11 +1477,25 @@ def unique_archive_name(name: str, used_names: set[str]) -> str:
     return candidate
 
 
+def write_zip_bytes(
+    archive: zipfile.ZipFile,
+    used_names: set[str],
+    name: str,
+    payload: bytes,
+    *,
+    compress_type: int = zipfile.ZIP_DEFLATED,
+) -> None:
+    archive.writestr(unique_archive_name(name, used_names), payload, compress_type=compress_type)
+
+
 def build_batch_zip(
     results: list[dict[str, Any]],
     summary_frame: pd.DataFrame,
     work_order_frame: pd.DataFrame | None = None,
     combined_report_frame: pd.DataFrame | None = None,
+    summary_csv_bytes: bytes | None = None,
+    work_order_csv_bytes: bytes | None = None,
+    combined_csv_bytes: bytes | None = None,
 ) -> bytes:
     buffer = io.BytesIO()
     used_names: set[str] = set()
@@ -1249,30 +1503,36 @@ def build_batch_zip(
     combined_report_frame = (
         combined_report_frame if combined_report_frame is not None else build_combined_mapping_report_frame(results)
     )
+    summary_csv_bytes = summary_csv_bytes if summary_csv_bytes is not None else dataframe_csv_bytes(summary_frame)
+    work_order_csv_bytes = work_order_csv_bytes if work_order_csv_bytes is not None else dataframe_csv_bytes(work_order_frame)
+    combined_csv_bytes = combined_csv_bytes if combined_csv_bytes is not None else dataframe_csv_bytes(combined_report_frame)
     with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr(
-            unique_archive_name("batch_summary.csv", used_names),
-            summary_frame.to_csv(index=False).encode("utf-8-sig"),
-        )
-        archive.writestr(
-            unique_archive_name("PD_작업지시_종합리포트.csv", used_names),
-            work_order_frame.to_csv(index=False).encode("utf-8-sig"),
-        )
-        archive.writestr(
-            unique_archive_name("전체_행별매핑_종합.csv", used_names),
-            combined_report_frame.to_csv(index=False).encode("utf-8-sig"),
-        )
+        write_zip_bytes(archive, used_names, "batch_summary.csv", summary_csv_bytes)
+        write_zip_bytes(archive, used_names, "PD_작업지시_종합리포트.csv", work_order_csv_bytes)
+        write_zip_bytes(archive, used_names, "전체_행별매핑_종합.csv", combined_csv_bytes)
         for result in results:
             output_stem = text(result.get("output_stem")) or default_mapping_stem(result.get("source_name", "mapping_result"))
             mapping_bytes = result.get("mapping_bytes") or b""
             transfer_bytes = result.get("transfer_bytes") or b""
             if mapping_bytes:
-                archive.writestr(unique_archive_name(f"{output_stem}.xlsx", used_names), mapping_bytes)
+                write_zip_bytes(
+                    archive,
+                    used_names,
+                    f"{output_stem}.xlsx",
+                    mapping_bytes,
+                    compress_type=zipfile.ZIP_STORED,
+                )
             if transfer_bytes:
-                archive.writestr(unique_archive_name(f"{output_stem}_S2전송자료.xlsx", used_names), transfer_bytes)
+                write_zip_bytes(
+                    archive,
+                    used_names,
+                    f"{output_stem}_S2전송자료.xlsx",
+                    transfer_bytes,
+                    compress_type=zipfile.ZIP_STORED,
+                )
             if result.get("status") != "success":
                 error_text = text(result.get("error")) or "처리하지 못했습니다."
-                archive.writestr(unique_archive_name(f"{output_stem}_오류.txt", used_names), error_text.encode("utf-8"))
+                write_zip_bytes(archive, used_names, f"{output_stem}_오류.txt", error_text.encode("utf-8"))
     return buffer.getvalue()
 
 
@@ -1630,18 +1890,28 @@ with st.sidebar:
     repo_baseline = repo_s2_baseline_summary()
     baseline_updated_at = repo_s2_baseline_updated_at(repo_baseline) if repo_baseline else ""
     usage_label, usage_tone = s2_usage_status(baseline_updated_at, current_cache["rows"])
+    guard_summary = repo_refresh_summary(S2_GUARD_SUMMARY_NAME)
+    service_content_summary = repo_refresh_summary(S2_SERVICE_CONTENT_SUMMARY_NAME)
+    health_warning_messages = s2_health_warning_messages(
+        repo_baseline=repo_baseline,
+        current_cache=current_cache,
+        guard_summary=guard_summary,
+        service_content_summary=service_content_summary,
+    )
     missing_guard_rows = lookup_row_count(S2_MISSING_LOOKUP)
     billing_guard_rows = lookup_row_count(S2_BILLING_LOOKUP)
     service_content_rows = lookup_row_count(S2_SERVICE_CONTENTS_LOOKUP)
     clickup_config = clickup_notification_config()
     render_s2_status_card(baseline_updated_at, usage_label, usage_tone)
-    st.caption("*매일 10시에 정규 업데이트됩니다.")
+    st.caption(f"*{S2_DAILY_REFRESH_TIME_LABEL} KST 정규 업데이트됩니다.")
 
     if usage_tone != "ok":
         render_sidebar_mini_notice(
-            "오늘 기준 업데이트가 아니면 관리자에게 요청하거나 본문 2번 `S2 기준`에서 수동 파일을 업로드하세요.",
+            f"마지막 성공 업데이트가 {S2_REFRESH_STALE_AFTER_HOURS}시간을 넘겼으면 관리자에게 요청하거나 본문 2번 `S2 기준`에서 수동 파일을 업로드하세요.",
             tone="warning",
         )
+    for health_message in health_warning_messages:
+        render_sidebar_mini_notice(health_message, tone="warning")
 
     cache_cols = st.columns(2)
     cache_cols[0].metric("현재 S2 기준 행", f"{current_cache['rows']:,}")
@@ -1770,7 +2040,7 @@ with st.expander("2. S2 기준", expanded=False):
         s2_source_mode = st.radio("S2 기준", s2_source_options, horizontal=True)
         use_payment_cache = s2_source_mode == ADMIN_S2_SOURCE_OPTION
         if not use_payment_cache:
-            st.warning("수동 S2 업로드는 예외 모드입니다. 오늘 작업에 최신 기준이 필요하면 먼저 관리자에게 S2 최신화를 요청하세요.")
+            st.warning("수동 S2 업로드는 예외 모드입니다. 최신 기준이 필요하면 먼저 관리자에게 S2 최신화를 요청하세요.")
             st.markdown(
                 f"""
                 - **S2 원천 엑셀**: S2 `[5031] 정산정보(지급)관리`에서 받은 원본 엑셀입니다. 앱이 필요한 기준 컬럼으로 변환합니다.
@@ -1874,14 +2144,15 @@ if run_clicked:
                 single_output_name=single_output_name,
                 progress_slot=progress_slot,
             )
+            progress_slot.caption("보고서/CSV/ZIP 생성 중")
+            st.session_state[MAPPING_RESULT_STATE_KEY] = build_mapping_session_state(
+                signature=run_signature,
+                results=results,
+                s2_df=s2_df,
+                s2_source_label=s2_source_label,
+                payment_summary=payment_summary,
+            )
         progress_slot.empty()
-        st.session_state[MAPPING_RESULT_STATE_KEY] = build_mapping_session_state(
-            signature=run_signature,
-            results=results,
-            s2_df=s2_df,
-            s2_source_label=s2_source_label,
-            payment_summary=payment_summary,
-        )
     except Exception as exc:
         if "progress_slot" in locals():
             progress_slot.empty()
@@ -1914,6 +2185,18 @@ batch_cols[1].metric("성공", f"{safe_int(status_counts.get('success')):,}")
 batch_cols[2].metric("차단", f"{safe_int(status_counts.get('blocked')):,}")
 batch_cols[3].metric("실패", f"{safe_int(status_counts.get('failed')):,}")
 st.dataframe(summary_frame, use_container_width=True, height=min(360, 45 + 35 * max(len(summary_frame), 1)))
+postprocess_stage_seconds = mapping_state.get("postprocess_stage_seconds") or {}
+if postprocess_stage_seconds:
+    with st.expander("후처리 시간", expanded=False):
+        st.dataframe(
+            pd.DataFrame(
+                [{"단계": key, "초": value} for key, value in postprocess_stage_seconds.items()],
+                columns=["단계", "초"],
+            ),
+            use_container_width=True,
+            hide_index=True,
+            height=260,
+        )
 
 report_download_cols = st.columns(3)
 with report_download_cols[0]:

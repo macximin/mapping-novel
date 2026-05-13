@@ -22,6 +22,7 @@ from s2_reference_guards import (
     normalize_service_content_rows,
     write_service_content_lookup,
 )
+from kiss_refresh_history import now_iso
 from scripts.refresh_kiss_payment_settlement import create_authenticated_session, load_env
 
 
@@ -53,6 +54,7 @@ def main() -> None:
     audit_frame.to_csv(audit_path, index=False, encoding="utf-8-sig")
     summary = {
         "created_at": today.isoformat(),
+        "finished_at": now_iso(),
         "content_style_code": args.content_style_code,
         "target_channels": len(targets),
         "target_missing_channels": sum(1 for row in target_audit if row["상태"] == "missing_channel_catalog"),
