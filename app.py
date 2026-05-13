@@ -1875,9 +1875,9 @@ def upload_detection_status_label(
     if settlement_file_count <= 0:
         return upload_detection_mode_label(selected_s2_channel)
     if selected_s2_channel != AUTO_PLATFORM_OPTION:
-        return f"{settlement_file_count:,}/{settlement_file_count:,} 적용"
+        return f"{settlement_file_count:,}개 중 {settlement_file_count:,}개 적용"
     detected_count = max(settlement_file_count - undetected_file_count, 0)
-    return f"{detected_count:,}/{settlement_file_count:,} 감지"
+    return f"{settlement_file_count:,}개 중 {detected_count:,}개 인식"
 
 
 def render_upload_status_card(label: str, value: str) -> None:
@@ -1997,10 +1997,10 @@ detection_frame, undetected_files = upload_detection_rows(settlement_files, sele
 
 status_cols = st.columns([1, 1, 0.18])
 with status_cols[0]:
-    render_upload_status_card("업로드된 파일", f"{len(settlement_files):,}개")
+    render_upload_status_card("업로드된 파일", f"{len(settlement_files):,}개 넣음")
 with status_cols[1]:
     render_upload_status_card(
-        "판매채널 감지",
+        "판매채널 인식",
         upload_detection_status_label(
             settlement_file_count=len(settlement_files),
             undetected_file_count=len(undetected_files),
