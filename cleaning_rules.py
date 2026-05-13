@@ -33,6 +33,16 @@ EXACT_CLEAN_TITLE_ALIASES = {
     "천대받는f급힐러라좋았는데요": "천대받는f급힐러라서좋았는데요",
     "던전에서성자가하는일": "던전에서성자性者가하는일",
     "백치공주시리즈": "백치공주",
+    "악작현대au": "악작",
+    "보수적이라며팬티는왜벗어": "보수적인데팬티는왜벗어",
+    "스피크오브더데블": "speakofthedevil",
+    "중력술사아스께기맨": "중력술사아스께끼맨",
+    "내가키운용사가나에게집착한다": "내가키운용사가나한테집착한다",
+    "망겜의고인물로살아남기프롤로그": "망겜의고인물로살아남기",
+    "플레이싱어느대공각하의장난감": "plaything어느대공각하의장난감",
+    "보이즈돈크라이": "boysdontcry",
+    "sm클럽암캐가된여자들": "sm클럽",
+    "고인물무림에가다": "고인물무림에가다갈드창작지원금",
 }
 SQUARE_WRAPPER_TAGS = (
     "bl",
@@ -109,6 +119,15 @@ class CleaningPolicy:
             return ""
         return self.text(match.group(1))
 
+    def _contract_parenthesized_title(self, value: str) -> str:
+        normalized = unicodedata.normalize("NFKC", value)
+        if not any(token in normalized for token in ("계약서", "발행권", "신작")):
+            return ""
+        match = re.search(r"\(([^()]*)\)\s*$", normalized)
+        if not match:
+            return ""
+        return self.text(match.group(1))
+
     def _apply_exact_title_alias(self, key: str) -> str:
         return EXACT_CLEAN_TITLE_ALIASES.get(key, key)
 
@@ -127,6 +146,10 @@ class CleaningPolicy:
 
         if re.fullmatch(r"\d{1,2}월\d{1,2}일", t):
             return t.lower()
+
+        contract_parenthesized_title = self._contract_parenthesized_title(t)
+        if contract_parenthesized_title:
+            t = contract_parenthesized_title
 
         structured_s2_title = self._structured_s2_title_segment(t)
         if structured_s2_title:
@@ -153,6 +176,7 @@ class CleaningPolicy:
         for keyword in [
             "개정판 l",
             "개정판",
+            "증보판",
             "외전",
             "무삭제본",
             "무삭제판",

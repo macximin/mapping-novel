@@ -89,6 +89,15 @@ class CleaningRulesTest(unittest.TestCase):
         self.assertEqual(policy.clean_title("12_조금은 야한 우리 회사_파워레인젖_일반"), "조금은야한우리회사")
         self.assertEqual(policy.clean_title("0_야한규칙으로 다 따먹음_파워레인젖_비일반"), "야한규칙으로다따먹음파워레인젖비일반")
 
+    def test_policy_extracts_contract_parenthesized_title(self) -> None:
+        policy = CleaningPolicy()
+
+        self.assertEqual(
+            policy.clean_title("배타적 발행권 설정계약서_김현준 작가_신작 1종 (EX급 만능사제가 되었다)"),
+            "ex급만능사제가되었다",
+        )
+        self.assertEqual(policy.clean_title("악작(현대AU 외전)"), "악작")
+
     def test_policy_applies_only_confirmed_exact_title_aliases(self) -> None:
         policy = CleaningPolicy()
 
@@ -103,6 +112,17 @@ class CleaningRulesTest(unittest.TestCase):
         self.assertEqual(policy.clean_title("천대받는 F급 힐러라 좋았는데요?"), "천대받는f급힐러라서좋았는데요")
         self.assertEqual(policy.clean_title("던전에서 성자가 하는 일 [단행본]"), "던전에서성자性者가하는일")
         self.assertEqual(policy.clean_title("백치 공주 시리즈"), "백치공주")
+        self.assertEqual(policy.clean_title("악작 현대AU"), "악작")
+        self.assertEqual(policy.clean_title("보수적이라며 팬티는 왜 벗어?"), "보수적인데팬티는왜벗어")
+        self.assertEqual(policy.clean_title("스피크 오브 더 데블"), "speakofthedevil")
+        self.assertEqual(policy.clean_title("중력술사 아스께기맨"), "중력술사아스께끼맨")
+        self.assertEqual(policy.clean_title("내가 키운 용사가 나에게 집착한다"), "내가키운용사가나한테집착한다")
+        self.assertEqual(policy.clean_title("[연재]망겜의 고인물로 살아남기 프롤로그"), "망겜의고인물로살아남기")
+        self.assertEqual(policy.clean_title("플레이싱 (Plaything) : 어느 대공 각하의 장난감 1"), "plaything어느대공각하의장난감")
+        self.assertEqual(policy.clean_title("[e북]보이즈 돈 크라이 (Boys don't cry) 1권"), "boysdontcry")
+        self.assertEqual(policy.clean_title("SM클럽 -암캐가 된 여자들- 268화"), "sm클럽")
+        self.assertEqual(policy.clean_title("고인물, 무림에 가다 1화"), "고인물무림에가다갈드창작지원금")
+        self.assertEqual(policy.clean_title("메소드 로맨스 증보판"), "메소드로맨스")
         self.assertEqual(policy.clean_title("독식하는 재벌 3세"), "독식하는재벌세")
         self.assertEqual(policy.clean_title("1980 독식하는 재벌!"), "독식하는재벌")
         self.assertEqual(policy.clean_title("다른 작품의 이야기"), "다른작품의이야기")

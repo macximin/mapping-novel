@@ -77,6 +77,26 @@ class SettlementAdapterRegistryTest(unittest.TestCase):
         self.assertEqual(feed["상품명"].iloc[0], "24/7")
         self.assertEqual(result.rows["정제_상품명"].iloc[0], "24/7")
 
+    def test_hana_areum_summary_rows_are_excluded(self) -> None:
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "한아름_fixture"
+        sheet.append(["작품명", "작가명", "BOOK NO", "건당 로그 금액"])
+        sheet.append(["한아름 성인 합계", "", "", 1000])
+        sheet.append(["한아름 web", "", "", 1000])
+        sheet.append(["아름북스 inapp", "", "", 1000])
+        sheet.append(["진짜 작품", "작가", "BOOK-1", 100])
+        payload = io.BytesIO()
+        workbook.save(payload)
+        payload.seek(0)
+
+        result = normalize_settlement(payload, platform="한아름", source_name="한아름_fixture.xlsx")
+        feed = result.to_mapping_feed()
+
+        self.assertEqual(len(feed), 1)
+        self.assertEqual(feed["상품명"].iloc[0], "진짜 작품")
+        self.assertEqual(result.rows["정제_상품명"].iloc[0], "진짜작품")
+
 
 class SettlementAdapterFixtureTest(unittest.TestCase):
     @classmethod

@@ -65,6 +65,9 @@ _PLATFORM_DATE_TITLE_REPAIRS = {
     ),
 }
 
+_HANA_AREUM_SUMMARY_TITLE_PREFIXES = ("한아름", "아름북스")
+_HANA_AREUM_SUMMARY_TITLE_SUFFIXES = ("합계", "web", "inapp")
+
 
 @dataclass(frozen=True)
 class AdapterSpec:
@@ -687,7 +690,11 @@ def _standardize(
 
     title = _pick_series(raw, spec.title_candidates)
     title_text = title.map(text)
-    data_mask = title_text.ne("") & ~title_text.map(_is_non_data_title)
+    data_mask = (
+        title_text.ne("")
+        & ~title_text.map(_is_non_data_title)
+        & ~title_text.map(lambda value: _is_platform_non_data_title(value, spec))
+    )
     data = raw[data_mask].copy()
     if data.empty:
         return _empty_rows()
@@ -809,6 +816,17 @@ def _is_non_data_title(value: str) -> bool:
         "sum",
         "total",
     } or any(marker in normalized for marker in ["소계", "총합", "원천징수"])
+
+
+def _is_platform_non_data_title(value: str, spec: AdapterSpec) -> bool:
+    if spec.platform != "한아름":
+        return False
+    normalized = _norm(value)
+    if normalized == "한아름":
+        return True
+    return normalized.startswith(_HANA_AREUM_SUMMARY_TITLE_PREFIXES) and normalized.endswith(
+        _HANA_AREUM_SUMMARY_TITLE_SUFFIXES
+    )
 
 
 def _number_or_blank(value: Any) -> Any:
