@@ -1856,7 +1856,7 @@ batch_cols[2].metric("차단", f"{safe_int(status_counts.get('blocked')):,}")
 batch_cols[3].metric("실패", f"{safe_int(status_counts.get('failed')):,}")
 st.dataframe(summary_frame, use_container_width=True, height=min(360, 45 + 35 * max(len(summary_frame), 1)))
 
-report_download_cols = st.columns(2)
+report_download_cols = st.columns(3)
 with report_download_cols[0]:
     st.download_button(
         "PD 작업지시 CSV 다운로드",
@@ -1875,12 +1875,12 @@ with report_download_cols[1]:
         on_click="ignore",
         disabled=bool(mapping_state.get("combined_report_empty")),
     )
-
-st.download_button(
-    "전체 결과 ZIP 다운로드",
-    mapping_state["zip_bytes"],
-    file_name=mapping_state["zip_name"],
-    mime="application/zip",
-    on_click="ignore",
-    disabled=summary_frame.empty,
-)
+with report_download_cols[2]:
+    st.download_button(
+        "모두 받기",
+        mapping_state["zip_bytes"],
+        file_name=mapping_state["zip_name"],
+        mime="application/zip",
+        on_click="ignore",
+        disabled=summary_frame.empty,
+    )
