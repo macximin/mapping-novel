@@ -1997,7 +1997,7 @@ detection_frame, undetected_files = upload_detection_rows(settlement_files, sele
 
 status_cols = st.columns([1, 1, 0.18])
 with status_cols[0]:
-    render_upload_status_card("업로드된 파일", f"{len(settlement_files):,}개 넣음")
+    render_upload_status_card("업로드된 파일", f"{len(settlement_files):,}")
 with status_cols[1]:
     render_upload_status_card(
         "판매채널 인식",
