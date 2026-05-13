@@ -1866,6 +1866,20 @@ def upload_detection_mode_label(selected_s2_channel: str) -> str:
     return "파일명 자동 감지" if selected_s2_channel == AUTO_PLATFORM_OPTION else f"직접 선택: {selected_s2_channel}"
 
 
+def upload_detection_status_label(
+    *,
+    settlement_file_count: int,
+    undetected_file_count: int,
+    selected_s2_channel: str,
+) -> str:
+    if settlement_file_count <= 0:
+        return upload_detection_mode_label(selected_s2_channel)
+    if selected_s2_channel != AUTO_PLATFORM_OPTION:
+        return f"{settlement_file_count:,}/{settlement_file_count:,} 적용"
+    detected_count = max(settlement_file_count - undetected_file_count, 0)
+    return f"{detected_count:,}/{settlement_file_count:,} 감지"
+
+
 def render_upload_status_card(label: str, value: str) -> None:
     st.markdown(
         f"""
@@ -1985,7 +1999,14 @@ status_cols = st.columns([1, 1, 0.18])
 with status_cols[0]:
     render_upload_status_card("업로드된 파일", f"{len(settlement_files):,}개")
 with status_cols[1]:
-    render_upload_status_card("판매채널 감지", upload_detection_mode_label(selected_s2_channel))
+    render_upload_status_card(
+        "판매채널 감지",
+        upload_detection_status_label(
+            settlement_file_count=len(settlement_files),
+            undetected_file_count=len(undetected_files),
+            selected_s2_channel=selected_s2_channel,
+        ),
+    )
 with status_cols[2]:
     st.markdown('<div class="upload-reset-spacer"></div>', unsafe_allow_html=True)
     reset_upload_clicked = st.button(
