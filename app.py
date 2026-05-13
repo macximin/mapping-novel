@@ -1875,9 +1875,9 @@ def upload_detection_status_label(
     if settlement_file_count <= 0:
         return upload_detection_mode_label(selected_s2_channel)
     if selected_s2_channel != AUTO_PLATFORM_OPTION:
-        return f"{settlement_file_count:,}개 중 {settlement_file_count:,}개 적용"
+        return f"{settlement_file_count:,}/{settlement_file_count:,}"
     detected_count = max(settlement_file_count - undetected_file_count, 0)
-    return f"{settlement_file_count:,}개 중 {detected_count:,}개 인식"
+    return f"{detected_count:,}/{settlement_file_count:,}"
 
 
 def render_upload_status_card(label: str, value: str) -> None:
