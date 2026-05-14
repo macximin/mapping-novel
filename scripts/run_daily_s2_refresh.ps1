@@ -54,14 +54,19 @@ function Invoke-Step {
 
     Write-Log "START $Name"
     Push-Location $RepoRoot
+    $exitCode = 0
+    $previousErrorActionPreference = $ErrorActionPreference
     try {
+        $ErrorActionPreference = "Continue"
         & $Python @Arguments 2>&1 | Tee-Object -FilePath $logPath -Append
-        if ($LASTEXITCODE -ne 0) {
-            throw "$Name failed with exit code $LASTEXITCODE"
-        }
+        $exitCode = $LASTEXITCODE
     }
     finally {
+        $ErrorActionPreference = $previousErrorActionPreference
         Pop-Location
+    }
+    if ($exitCode -ne 0) {
+        throw "$Name failed with exit code $exitCode"
     }
     Write-Log "DONE $Name"
 }
@@ -74,14 +79,19 @@ function Invoke-GitStep {
 
     Write-Log "START $Name"
     Push-Location $RepoRoot
+    $exitCode = 0
+    $previousErrorActionPreference = $ErrorActionPreference
     try {
+        $ErrorActionPreference = "Continue"
         & $GitExe @Arguments 2>&1 | Tee-Object -FilePath $logPath -Append
-        if ($LASTEXITCODE -ne 0) {
-            throw "$Name failed with exit code $LASTEXITCODE"
-        }
+        $exitCode = $LASTEXITCODE
     }
     finally {
+        $ErrorActionPreference = $previousErrorActionPreference
         Pop-Location
+    }
+    if ($exitCode -ne 0) {
+        throw "$Name failed with exit code $exitCode"
     }
     Write-Log "DONE $Name"
 }
@@ -130,6 +140,10 @@ function Publish-RefreshArtifacts {
 try {
     Write-Log "Daily S2 refresh started"
     Write-Log "Using Git executable: $GitExe"
+
+    if (-not (Test-Path $Python)) {
+        throw "Python executable not found: $Python"
+    }
 
     if (-not (Test-Path $envFile)) {
         throw ".env file not found: $envFile"
