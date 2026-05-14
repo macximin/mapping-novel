@@ -1,9 +1,13 @@
 param(
     [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path,
-    [string]$Python = "C:\Users\User\AppData\Local\Programs\Python\Python312\python.exe"
+    [string]$Python = "C:\Users\User\AppData\Local\Programs\Python\Python312\python.exe",
+    [string]$Git = ""
 )
 
 $ErrorActionPreference = "Stop"
+$env:GIT_TERMINAL_PROMPT = "0"
+$env:PYTHONUTF8 = "1"
+$env:PYTHONIOENCODING = "utf-8"
 
 $logDir = Join-Path $RepoRoot "logs\s2_refresh"
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
@@ -19,6 +23,28 @@ function Write-Log {
     Add-Content -Path $logPath -Value $line -Encoding UTF8
     Write-Output $line
 }
+
+function Resolve-GitExecutable {
+    param([string]$RequestedGit)
+
+    $candidates = @(
+        $RequestedGit,
+        (Get-Command git.exe -ErrorAction SilentlyContinue).Source,
+        "C:\Program Files (x86)\Git\cmd\git.exe",
+        "C:\Program Files\Git\cmd\git.exe",
+        "C:\Program Files\Git\bin\git.exe"
+    ) | Where-Object { $_ }
+
+    foreach ($candidate in $candidates) {
+        if (Test-Path $candidate) {
+            return (Resolve-Path $candidate).Path
+        }
+    }
+
+    throw "git.exe was not found. Pass -Git or install Git in a standard location."
+}
+
+$GitExe = Resolve-GitExecutable $Git
 
 function Invoke-Step {
     param(
@@ -49,7 +75,7 @@ function Invoke-GitStep {
     Write-Log "START $Name"
     Push-Location $RepoRoot
     try {
-        & git @Arguments 2>&1 | Tee-Object -FilePath $logPath -Append
+        & $GitExe @Arguments 2>&1 | Tee-Object -FilePath $logPath -Append
         if ($LASTEXITCODE -ne 0) {
             throw "$Name failed with exit code $LASTEXITCODE"
         }
@@ -81,7 +107,7 @@ function Publish-RefreshArtifacts {
 
     Push-Location $RepoRoot
     try {
-        & git diff --cached --quiet --exit-code -- @artifactPaths
+        & $GitExe diff --cached --quiet --exit-code -- @artifactPaths
         $diffExitCode = $LASTEXITCODE
     }
     finally {
@@ -101,43 +127,54 @@ function Publish-RefreshArtifacts {
     Invoke-GitStep "Git push S2 refresh artifacts" @("push", "origin", "main")
 }
 
-Write-Log "Daily S2 refresh started"
+try {
+    Write-Log "Daily S2 refresh started"
+    Write-Log "Using Git executable: $GitExe"
 
-if (-not (Test-Path $envFile)) {
-    throw ".env file not found: $envFile"
+    if (-not (Test-Path $envFile)) {
+        throw ".env file not found: $envFile"
+    }
+
+    Invoke-GitStep "Git pull latest main" @("pull", "--ff-only", "origin", "main")
+
+    Invoke-Step "S2 auth check" @(
+        "scripts\refresh_kiss_payment_settlement.py",
+        "--env-file", $envFile,
+        "--check-auth-only",
+        "--auth-timeout", "10"
+    )
+
+    Invoke-Step "S2 payment settlement full replace" @(
+        "scripts\refresh_kiss_payment_settlement.py",
+        "--env-file", $envFile,
+        "--mode", "full-replace",
+        "--lookup-only",
+        "--page-size", "1000000",
+        "--content-style-code", "102"
+    )
+
+    Invoke-Step "S2 reference guards refresh" @(
+        "scripts\refresh_s2_reference_guards.py",
+        "--env-file", $envFile,
+        "--page-size", "1000000",
+        "--content-style-code", "102"
+    )
+
+    Invoke-Step "S2 sales-channel contents refresh" @(
+        "scripts\refresh_s2_sales_channel_contents.py",
+        "--env-file", $envFile,
+        "--content-style-code", "102"
+    )
+
+    Publish-RefreshArtifacts
+
+    Write-Log "Daily S2 refresh finished"
+    exit 0
 }
-
-Invoke-GitStep "Git pull latest main" @("pull", "--ff-only", "origin", "main")
-
-Invoke-Step "S2 auth check" @(
-    "scripts\refresh_kiss_payment_settlement.py",
-    "--env-file", $envFile,
-    "--check-auth-only",
-    "--auth-timeout", "10"
-)
-
-Invoke-Step "S2 payment settlement full replace" @(
-    "scripts\refresh_kiss_payment_settlement.py",
-    "--env-file", $envFile,
-    "--mode", "full-replace",
-    "--lookup-only",
-    "--page-size", "1000000",
-    "--content-style-code", "102"
-)
-
-Invoke-Step "S2 reference guards refresh" @(
-    "scripts\refresh_s2_reference_guards.py",
-    "--env-file", $envFile,
-    "--page-size", "1000000",
-    "--content-style-code", "102"
-)
-
-Invoke-Step "S2 sales-channel contents refresh" @(
-    "scripts\refresh_s2_sales_channel_contents.py",
-    "--env-file", $envFile,
-    "--content-style-code", "102"
-)
-
-Publish-RefreshArtifacts
-
-Write-Log "Daily S2 refresh finished"
+catch {
+    Write-Log "FAILED $($_.Exception.Message)"
+    if ($_.ScriptStackTrace) {
+        Write-Log "STACK $($_.ScriptStackTrace)"
+    }
+    exit 1
+}
