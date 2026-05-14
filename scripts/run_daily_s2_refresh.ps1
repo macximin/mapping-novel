@@ -24,6 +24,14 @@ function Write-Log {
     Write-Output $line
 }
 
+function Write-ProcessOutput {
+    process {
+        $line = "$_"
+        Add-Content -Path $logPath -Value $line -Encoding UTF8
+        Write-Output $line
+    }
+}
+
 function Resolve-GitExecutable {
     param([string]$RequestedGit)
 
@@ -58,7 +66,7 @@ function Invoke-Step {
     $previousErrorActionPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = "Continue"
-        & $Python @Arguments 2>&1 | Tee-Object -FilePath $logPath -Append
+        & $Python @Arguments 2>&1 | Write-ProcessOutput
         $exitCode = $LASTEXITCODE
     }
     finally {
@@ -83,7 +91,7 @@ function Invoke-GitStep {
     $previousErrorActionPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = "Continue"
-        & $GitExe @Arguments 2>&1 | Tee-Object -FilePath $logPath -Append
+        & $GitExe @Arguments 2>&1 | Write-ProcessOutput
         $exitCode = $LASTEXITCODE
     }
     finally {
@@ -133,8 +141,8 @@ function Publish-RefreshArtifacts {
     }
 
     Invoke-GitStep "Git commit S2 refresh artifacts" (@("commit", "-m", "Refresh S2 lookup data $today", "--") + $artifactPaths)
-    Invoke-GitStep "Git rebase latest main before push" @("pull", "--rebase", "origin", "main")
-    Invoke-GitStep "Git push S2 refresh artifacts" @("push", "origin", "main")
+    Invoke-GitStep "Git rebase latest main before push" @("pull", "--quiet", "--rebase", "origin", "main")
+    Invoke-GitStep "Git push S2 refresh artifacts" @("push", "--quiet", "origin", "main")
 }
 
 try {
@@ -149,7 +157,7 @@ try {
         throw ".env file not found: $envFile"
     }
 
-    Invoke-GitStep "Git pull latest main" @("pull", "--ff-only", "origin", "main")
+    Invoke-GitStep "Git pull latest main" @("pull", "--quiet", "--ff-only", "origin", "main")
 
     Invoke-Step "S2 auth check" @(
         "scripts\refresh_kiss_payment_settlement.py",
