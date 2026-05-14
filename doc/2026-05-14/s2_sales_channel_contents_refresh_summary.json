@@ -1,12 +1,12 @@
 {
   "created_at": "2026-05-14",
-  "finished_at": "2026-05-14T09:43:40+09:00",
+  "finished_at": "2026-05-14T12:01:17+09:00",
   "content_style_code": "102",
   "target_channels": 51,
   "target_missing_channels": 0,
   "fetch_failures": 0,
-  "raw_rows": 96298,
-  "lookup_rows": 96298,
+  "raw_rows": 96299,
+  "lookup_rows": 96299,
   "sales_channel_counts": {
     "원스토어(소설)": 9998,
     "미스터블루(소설)": 9666,
@@ -30,7 +30,7 @@
     "조아라(소설)": 1263
   },
   "content_shape_counts": {
-    "소설": 96295,
+    "소설": 96296,
     "웹툰": 3
   },
   "output": "C:\\Users\\User\\Desktop\\mapping-novel\\data\\s2_sales_channel_content_lookup.csv",
